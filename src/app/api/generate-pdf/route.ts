@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import puppeteer from "puppeteer";
+const isVercelDeployment = process.env.VERCEL_ENV !== undefined;
 export async function POST(request: NextRequest) {
   try {
     const { html, filename } = await request.json();
@@ -9,34 +9,40 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-accelerated-2d-canvas",
-        "--no-first-run",
-        "--no-zygote",
-        "--single-process",
-        "--disable-gpu",
-      ],
-    });
+    let browser;
+    if (isVercelDeployment) {
+      const puppeteerCore = await import("puppeteer-core");
+      const chromium = await import("@sparticuz/chromium");
+      browser = await puppeteerCore.default.launch({
+        args: chromium.default.args,
+        defaultViewport: {
+          width: 1280,
+          height: 720,
+        },
+        executablePath: await chromium.default.executablePath(),
+        headless: true,
+      });
+    } else {
+      const puppeteer = await import("puppeteer");
+      browser = await puppeteer.default.launch({
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-accelerated-2d-canvas",
+          "--no-first-run",
+          "--no-zygote",
+          "--single-process",
+          "--disable-gpu",
+        ],
+      });
+    }
     const page = await browser.newPage();
     await page.setContent(html, {
       waitUntil: ["networkidle0", "domcontentloaded"],
     });
-    await page.evaluate(() => {
-      return new Promise<void>((resolve) => {
-        if (document.fonts) {
-          document.fonts.ready.then(() => {
-            setTimeout(resolve, 1000);
-          });
-        } else {
-          setTimeout(resolve, 2000);
-        }
-      });
-    });
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
