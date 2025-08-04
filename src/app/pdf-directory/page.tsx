@@ -23,6 +23,10 @@ const formatTextForPDF = (text: string): string => {
   if (!text) return "N/A";
   return text.trim() || "N/A";
 };
+const wrapMalayalamText = (text: string): string => {
+  if (!text || text === "N/A") return text;
+  return `<span class="malayalam-text">${formatTextForPDF(text)}</span>`;
+};
 const generatePDFHTML = (
   families: Family[],
   language: "english" | "malayalam" | "both"
@@ -30,11 +34,11 @@ const generatePDFHTML = (
   const getTitle = () => {
     switch (language) {
       case "malayalam":
-        return `<span class="malayalam-text">${families[0].address_ml}</span>`;
+        return wrapMalayalamText("കുടുംബ ഡയറക്ടറി");
       case "english":
         return "Family Directory";
       default:
-        return `Family Directory | <span class="malayalam-text">${families[0].address_ml}</span>`;
+        return `Family Directory | ${wrapMalayalamText("കുടുംബ ഡയറക്ടറി")}`;
     }
   };
   const pages = [];
@@ -51,12 +55,10 @@ const generatePDFHTML = (
                 if (language === "english")
                   return formatTextForPDF(member.name_en);
                 if (language === "malayalam")
-                  return formatTextForPDF(member.name_ml || member.name_en);
+                  return wrapMalayalamText(member.name_ml || member.name_en);
                 let content = formatTextForPDF(member.name_en);
                 if (member.name_ml && member.name_ml !== member.name_en) {
-                  content += `<br><span class="malayalam-text">${formatTextForPDF(
-                    member.name_ml
-                  )}</span>`;
+                  content += `<br>${wrapMalayalamText(member.name_ml)}`;
                 }
                 return content;
               })();
@@ -64,7 +66,7 @@ const generatePDFHTML = (
                 if (language === "english")
                   return formatTextForPDF(member.relationship_en);
                 if (language === "malayalam")
-                  return formatTextForPDF(
+                  return wrapMalayalamText(
                     member.relationship_ml || member.relationship_en
                   );
                 let content = formatTextForPDF(member.relationship_en);
@@ -72,9 +74,7 @@ const generatePDFHTML = (
                   member.relationship_ml &&
                   member.relationship_ml !== member.relationship_en
                 ) {
-                  content += `<br><span class="malayalam-text">${formatTextForPDF(
-                    member.relationship_ml
-                  )}</span>`;
+                  content += `<br>${wrapMalayalamText(member.relationship_ml)}`;
                 }
                 return content;
               })();
@@ -82,7 +82,7 @@ const generatePDFHTML = (
                 if (language === "english")
                   return formatTextForPDF(member.occupation_en);
                 if (language === "malayalam")
-                  return formatTextForPDF(
+                  return wrapMalayalamText(
                     member.occupation_ml || member.occupation_en
                   );
                 let content = formatTextForPDF(member.occupation_en);
@@ -90,9 +90,7 @@ const generatePDFHTML = (
                   member.occupation_ml &&
                   member.occupation_ml !== member.occupation_en
                 ) {
-                  content += `<br><span class="malayalam-text">${formatTextForPDF(
-                    member.occupation_ml
-                  )}</span>`;
+                  content += `<br>${wrapMalayalamText(member.occupation_ml)}`;
                 }
                 return content;
               })();
@@ -111,7 +109,7 @@ const generatePDFHTML = (
           <td class="table-cell empty-message" colspan="4">
             ${
               language === "malayalam"
-                ? "കുടുംബാംഗങ്ങളുടെ രേഖകളില്ല"
+                ? wrapMalayalamText("കുടുംബാംഗങ്ങളുടെ രേഖകളില്ല")
                 : "No family members recorded"
             }
           </td>
@@ -121,22 +119,32 @@ const generatePDFHTML = (
       if (language === "english")
         return `<div class="address">${family.address_en}</div>`;
       if (language === "malayalam")
-        return `<div class="address-malayalam">${
+        return `<div class="address-malayalam">${wrapMalayalamText(
           family.address_ml || family.address_en
-        }</div>`;
+        )}</div>`;
       let content = `<div class="address">${family.address_en}</div>`;
       if (family.address_ml) {
-        content += `<div class="address-malayalam">${family.address_ml}</div>`;
+        content += `<div class="address-malayalam">${wrapMalayalamText(
+          family.address_ml
+        )}</div>`;
       }
       return content;
     })();
     const tableHeaders = (() => {
       if (language === "malayalam") {
         return `
-          <th class="table-header-cell name-header">പേര്</th>
-          <th class="table-header-cell relationship-header">ബന്ധം</th>
-          <th class="table-header-cell occupation-header">ജോലി/വിദ്യാഭ്യാസം</th>
-          <th class="table-header-cell age-header">പ്രായം</th>
+          <th class="table-header-cell name-header">${wrapMalayalamText(
+            "പേര്"
+          )}</th>
+          <th class="table-header-cell relationship-header">${wrapMalayalamText(
+            "ബന്ധം"
+          )}</th>
+          <th class="table-header-cell occupation-header">${wrapMalayalamText(
+            "ജോലി/വിദ്യാഭ്യാസം"
+          )}</th>
+          <th class="table-header-cell age-header">${wrapMalayalamText(
+            "പ്രായം"
+          )}</th>
         `;
       }
       return `
@@ -215,7 +223,7 @@ const generatePDFHTML = (
           background: white;
         }
         .malayalam-text {
-          font-family: 'Noto Sans Malayalam', 'Arial Unicode MS', sans-serif;
+          font-family: 'Noto Sans Malayalam', 'Arial Unicode MS', sans-serif !important;
           font-size: 11px;
           line-height: 1.7;
         }
@@ -277,7 +285,6 @@ const generatePDFHTML = (
           line-height: 1.4;
         }
         .address-malayalam {
-          font-family: 'Noto Sans Malayalam', 'Arial Unicode MS', sans-serif;
           font-size: 12px;
           color: #475569;
           margin-bottom: 6px;
