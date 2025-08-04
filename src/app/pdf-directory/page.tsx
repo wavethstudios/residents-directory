@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-
 type Member = {
   name_en: string;
   name_ml: string;
@@ -11,7 +10,6 @@ type Member = {
   occupation_ml: string;
   age: number;
 };
-
 type Family = {
   id: string;
   house_number: string;
@@ -21,65 +19,42 @@ type Family = {
   members: Member[];
   photo_url?: string;
 };
-
 const formatTextForPDF = (text: string): string => {
   if (!text) return "N/A";
   return text.trim() || "N/A";
 };
-
-// Helper function to detect Malayalam characters
 const containsMalayalam = (text: string): boolean => {
   if (!text) return false;
-  // Malayalam Unicode range: U+0D00–U+0D7F
   const malayalamRegex = /[\u0D00-\u0D7F]/;
   return malayalamRegex.test(text);
 };
-
-// Helper function to wrap Malayalam text with proper CSS class
 const wrapMalayalamText = (text: string): string => {
   if (!text || text === "N/A") return text;
   return `<span class="malayalam-text">${formatTextForPDF(text)}</span>`;
 };
-
-// Smart text formatter that auto-detects and wraps Malayalam text
 const smartFormatText = (text: string): string => {
   if (!text || text === "N/A") return formatTextForPDF(text);
-
   const formattedText = formatTextForPDF(text);
-
-  // If text contains Malayalam characters, wrap it with the Malayalam class
   if (containsMalayalam(formattedText)) {
     return `<span class="malayalam-text">${formattedText}</span>`;
   }
-
   return formattedText;
 };
-
-// Enhanced smart formatter for mixed content (English + Malayalam)
 const smartFormatMixedText = (text: string): string => {
   if (!text || text === "N/A") return formatTextForPDF(text);
-
   const formattedText = formatTextForPDF(text);
-
-  // Check if the text contains both Malayalam and English characters
   const hasMalayalam = containsMalayalam(formattedText);
   const hasEnglish = /[a-zA-Z0-9]/.test(formattedText);
-
   if (hasMalayalam && hasEnglish) {
-    // Mixed content - need to wrap Malayalam portions only
     return formattedText.replace(
       /([\u0D00-\u0D7F\s]+)/g,
       '<span class="malayalam-text">$1</span>'
     );
   } else if (hasMalayalam) {
-    // Pure Malayalam
     return `<span class="malayalam-text">${formattedText}</span>`;
   }
-
-  // Pure English or numbers
   return formattedText;
 };
-
 const generatePDFHTML = (
   families: Family[],
   language: "english" | "malayalam" | "both"
@@ -94,13 +69,11 @@ const generatePDFHTML = (
         return `Family Directory | ${wrapMalayalamText("കുടുംബ ഡയറക്ടറി")}`;
     }
   };
-
   const pages = [];
   for (let i = 0; i < families.length; i += 2) {
     const familyPair = families.slice(i, i + 2);
     pages.push(familyPair);
   }
-
   const generateFamilyCard = (family: Family) => {
     const membersRows =
       family.members?.length > 0
@@ -117,7 +90,6 @@ const generatePDFHTML = (
                 }
                 return content;
               })();
-
               const relationshipCell = (() => {
                 if (language === "english")
                   return smartFormatText(member.relationship_en);
@@ -134,7 +106,6 @@ const generatePDFHTML = (
                 }
                 return content;
               })();
-
               const occupationCell = (() => {
                 if (language === "english")
                   return smartFormatText(member.occupation_en);
@@ -151,7 +122,6 @@ const generatePDFHTML = (
                 }
                 return content;
               })();
-
               return `
             <tr class="${index % 2 === 0 ? "table-row" : "table-row-alt"}">
               <td class="table-cell name-cell">${nameCell}</td>
@@ -173,7 +143,6 @@ const generatePDFHTML = (
           </td>
         </tr>
       `;
-
     const addressContent = (() => {
       if (language === "english")
         return `<div class="address">${smartFormatText(
@@ -193,10 +162,7 @@ const generatePDFHTML = (
       }
       return content;
     })();
-
-    // Fixed house number formatting with proper Malayalam support
     const houseNumberContent = smartFormatMixedText(family.house_number);
-
     const tableHeaders = (() => {
       if (language === "malayalam") {
         return `
@@ -221,7 +187,6 @@ const generatePDFHTML = (
         <th class="table-header-cell age-header">Age</th>
       `;
     })();
-
     return `
       <div class="family-section">
         <div class="family-header">
@@ -253,7 +218,6 @@ const generatePDFHTML = (
       </div>
     `;
   };
-
   const pagesHTML = pages
     .map(
       (familyPair, pageIndex) => `
@@ -269,7 +233,6 @@ const generatePDFHTML = (
   `
     )
     .join("");
-
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -280,13 +243,11 @@ const generatePDFHTML = (
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Malayalam:wght@400;500;600;700&display=swap');
-
         * {
           margin: 0;
           padding: 0;
           box-sizing: border-box;
         }
-
         body {
           font-family: 'Inter', 'Helvetica', sans-serif;
           font-size: 10px;
@@ -294,13 +255,11 @@ const generatePDFHTML = (
           color: #334155;
           background: white;
         }
-
         .malayalam-text {
           font-family: 'Noto Sans Malayalam', 'Arial Unicode MS', sans-serif !important;
           font-size: 11px;
           line-height: 1.7;
         }
-
         .page {
           width: 210mm;
           min-height: 297mm;
@@ -311,11 +270,9 @@ const generatePDFHTML = (
           display: flex;
           flex-direction: column;
         }
-
         .page-break {
           page-break-after: always;
         }
-
         .header {
           font-size: 14px;
           text-align: center;
@@ -325,14 +282,12 @@ const generatePDFHTML = (
           padding-bottom: 8px;
           font-family: 'Inter', 'Helvetica', sans-serif;
         }
-
         .page-container {
           flex: 1;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
         }
-
         .family-section {
           height: 48%;
           margin-bottom: 15px;
@@ -340,19 +295,16 @@ const generatePDFHTML = (
           border-radius: 8px;
           padding: 20px;
         }
-
         .family-header {
           display: flex;
           justify-content: space-between;
           margin-bottom: 15px;
           align-items: flex-start;
         }
-
         .family-info {
           flex: 1;
           margin-right: 15px;
         }
-
         .house-number {
           font-size: 18px;
           font-weight: 700;
@@ -360,34 +312,29 @@ const generatePDFHTML = (
           margin-bottom: 8px;
           line-height: 1.4;
         }
-
         /* Enhanced house number styling for Malayalam */
         .house-number .malayalam-text {
           font-size: 19px !important;
           font-weight: 700;
           line-height: 1.6;
         }
-
         .address {
           font-size: 11px;
           color: #475569;
           margin-bottom: 6px;
           line-height: 1.4;
         }
-
         .address-malayalam {
           font-size: 12px;
           color: #475569;
           margin-bottom: 6px;
           line-height: 1.8;
         }
-
         .phone {
           font-size: 11px;
           color: #475569;
           font-weight: 600;
         }
-
         .photo-container {
           width: 80px;
           height: 80px;
@@ -398,35 +345,29 @@ const generatePDFHTML = (
           align-items: center;
           flex-shrink: 0;
         }
-
         .photo {
           width: 80px;
           height: 80px;
           border-radius: 5px;
           object-fit: cover;
         }
-
         .placeholder-text {
           font-size: 8px;
           color: #64748b;
           text-align: center;
           padding: 5px;
         }
-
         .members-table {
           border-radius: 4px;
           overflow: hidden;
         }
-
         .members-table table {
           width: 100%;
           border-collapse: collapse;
         }
-
         .table-header {
           background: #3b82f6;
         }
-
         .table-header-cell {
           padding: 8px;
           font-size: 9px;
@@ -435,31 +376,24 @@ const generatePDFHTML = (
           text-align: left;
           font-family: 'Inter', 'Helvetica', sans-serif;
         }
-
         .name-header {
           width: 35%;
         }
-
         .relationship-header {
           width: 20%;
         }
-
         .occupation-header {
           width: 35%;
         }
-
         .age-header {
           width: 10%;
         }
-
         .table-row {
           background: white;
         }
-
         .table-row-alt {
           background: #f1f5f9;
         }
-
         .table-cell {
           padding: 8px;
           font-size: 9px;
@@ -468,31 +402,25 @@ const generatePDFHTML = (
           vertical-align: top;
           border-bottom: 1px solid #e2e8f0;
         }
-
         .name-cell {
           width: 35%;
         }
-
         .relationship-cell {
           width: 20%;
         }
-
         .occupation-cell {
           width: 35%;
         }
-
         .age-cell {
           width: 10%;
           text-align: center;
         }
-
         .empty-message {
           text-align: center;
           color: #64748b;
           font-style: italic;
           padding: 15px;
         }
-
         .page-number {
           position: absolute;
           bottom: 15px;
@@ -500,7 +428,6 @@ const generatePDFHTML = (
           font-size: 9px;
           color: #64748b;
         }
-
         @media print {
           .page {
             margin: 0;
@@ -518,14 +445,12 @@ const generatePDFHTML = (
     </html>
   `;
 };
-
 const generatePDF = async (
   families: Family[],
   language: "english" | "malayalam" | "both"
 ): Promise<void> => {
   try {
     const htmlContent = generatePDFHTML(families, language);
-
     const response = await fetch("/api/generate-pdf", {
       method: "POST",
       headers: {
@@ -538,11 +463,9 @@ const generatePDF = async (
         }.pdf`,
       }),
     });
-
     if (!response.ok) {
       throw new Error("Failed to generate PDF");
     }
-
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -560,42 +483,34 @@ const generatePDF = async (
     alert("Failed to generate PDF. Please try again.");
   }
 };
-
 export default function PDFDirectoryPage() {
   const supabase = createClient();
   const [families, setFamilies] = useState<Family[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState<{ [key: string]: boolean }>({});
-
   useEffect(() => {
     const fetchFamilies = async () => {
       try {
         setLoading(true);
         setError(null);
-
         let finalData: Family[] | null = null;
-
         const { data: nestedData, error: nestedError } = await supabase
           .from("families")
           .select("*, members(*)")
           .order("house_number", { ascending: true });
-
         if (nestedError) {
           console.warn(
             "Nested select failed, trying fallback:",
             nestedError.message
           );
-
           const { data: familiesData, error: fallbackError } = await supabase
             .from("families")
             .select("*")
             .order("house_number", { ascending: true });
-
           if (fallbackError) {
             throw new Error(`Database query failed: ${fallbackError.message}`);
           }
-
           const familiesWithMembers = await Promise.all(
             (familiesData || []).map(async (family) => {
               const { data: membersData } = await supabase
@@ -604,23 +519,19 @@ export default function PDFDirectoryPage() {
                   "name_en, name_ml, relationship_en, relationship_ml, occupation_en, occupation_ml, age"
                 )
                 .eq("family_id", family.id);
-
               return {
                 ...family,
                 members: membersData || [],
               };
             })
           );
-
           finalData = familiesWithMembers as Family[];
         } else {
           finalData = nestedData as Family[];
         }
-
         if (!finalData) {
           throw new Error("No data was received from the database.");
         }
-
         setFamilies(finalData);
       } catch (err) {
         if (err instanceof Error) {
@@ -632,10 +543,8 @@ export default function PDFDirectoryPage() {
         setLoading(false);
       }
     };
-
     fetchFamilies();
   }, [supabase]);
-
   const handleGeneratePDF = async (
     language: "english" | "malayalam" | "both"
   ) => {
@@ -646,7 +555,6 @@ export default function PDFDirectoryPage() {
       setGenerating((prev) => ({ ...prev, [language]: false }));
     }
   };
-
   if (loading) {
     return (
       <div className="container mx-auto p-6">
@@ -657,7 +565,6 @@ export default function PDFDirectoryPage() {
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="container mx-auto p-6">
@@ -693,7 +600,6 @@ export default function PDFDirectoryPage() {
       </div>
     );
   }
-
   if (!families.length) {
     return (
       <div className="container mx-auto p-6">
@@ -708,14 +614,12 @@ export default function PDFDirectoryPage() {
       </div>
     );
   }
-
   return (
     <div className="container mx-auto p-6">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-8 text-center text-white-800">
           Generate PDF
         </h1>
-
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
@@ -727,7 +631,6 @@ export default function PDFDirectoryPage() {
                 pages
               </p>
             </div>
-
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={() => handleGeneratePDF("english")}
@@ -745,7 +648,6 @@ export default function PDFDirectoryPage() {
                   )}
                 </span>
               </button>
-
               <button
                 onClick={() => handleGeneratePDF("malayalam")}
                 disabled={generating.malayalam}
@@ -762,7 +664,6 @@ export default function PDFDirectoryPage() {
                   )}
                 </span>
               </button>
-
               <button
                 onClick={() => handleGeneratePDF("both")}
                 disabled={generating.both}
