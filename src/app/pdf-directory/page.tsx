@@ -30,11 +30,11 @@ const generatePDFHTML = (
   const getTitle = () => {
     switch (language) {
       case "malayalam":
-        return families[0]?.members[0]?.name_ml || "കുടുംബ ഡയറക്ടറി";
+        return `<span class="malayalam-text">${families[0].address_ml}</span>`;
       case "english":
         return "Family Directory";
       default:
-        return families[0]?.members[0]?.name_ml;
+        return `Family Directory | <span class="malayalam-text">${families[0].address_ml}</span>`;
     }
   };
   const pages = [];
