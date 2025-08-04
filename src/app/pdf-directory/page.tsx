@@ -34,7 +34,7 @@ const generatePDFHTML = (
       case "english":
         return "Family Directory";
       default:
-        return "Family Directory | കുടുംബ ഡയറക്ടറി";
+        return families[0]?.members[0]?.name_ml;
     }
   };
   const pages = [];
