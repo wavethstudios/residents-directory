@@ -26,7 +26,7 @@ let bloodGroupsCache: BloodGroup[] | null = null;
 let relationshipsCache: Relationship[] | null = null;
 let occupationsCache: Occupation[] | null = null;
 const CACHE_DURATION = 5 * 60 * 1000;
-let lastFetchTime = {
+const lastFetchTime = {
   bloodGroups: 0,
   relationships: 0,
   occupations: 0,
@@ -157,35 +157,43 @@ const getFallbackRelationships = (): Relationship[] => [
   },
   {
     id: 2,
-    value_en: "Father",
-    value_ml: "പിതാവ്",
-    label: "Father (പിതാവ്)",
+    value_en: "Head of Family (Female)",
+    value_ml: "ഗ്രഹനാഥ",
+    label: "Head of Family (Female) (ഗ്രഹനാഥ)",
     is_active: true,
     sort_order: 2,
   },
   {
     id: 3,
-    value_en: "Mother",
-    value_ml: "മാതാവ്",
-    label: "Mother (മാതാവ്)",
+    value_en: "Father",
+    value_ml: "പിതാവ്",
+    label: "Father (പിതാവ്)",
     is_active: true,
     sort_order: 3,
   },
   {
     id: 4,
-    value_en: "Son",
-    value_ml: "മകൻ",
-    label: "Son (മകൻ)",
+    value_en: "Mother",
+    value_ml: "മാതാവ്",
+    label: "Mother (മാതാവ്)",
     is_active: true,
     sort_order: 4,
   },
   {
     id: 5,
+    value_en: "Son",
+    value_ml: "മകൻ",
+    label: "Son (മകൻ)",
+    is_active: true,
+    sort_order: 5,
+  },
+  {
+    id: 6,
     value_en: "Daughter",
     value_ml: "മകൾ",
     label: "Daughter (മകൾ)",
     is_active: true,
-    sort_order: 5,
+    sort_order: 6,
   },
 ];
 const getFallbackOccupations = (): Occupation[] => [
