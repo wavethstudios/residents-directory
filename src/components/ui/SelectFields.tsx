@@ -1,8 +1,11 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   getBloodGroupOptions,
   getRelationshipOptions,
   getOccupationOptions,
+  BloodGroup,
+  Relationship,
+  Occupation,
 } from "@/lib/constants";
 interface SelectFieldProps {
   value: string;
@@ -20,18 +23,33 @@ export const BloodGroupSelect: React.FC<SelectFieldProps> = ({
   className = "",
   disabled = false,
 }) => {
-  const options = getBloodGroupOptions();
+  const [options, setOptions] = useState<BloodGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        setLoading(true);
+        const data = await getBloodGroupOptions();
+        setOptions(data);
+      } catch (error) {
+        console.error("Error loading blood groups:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOptions();
+  }, []);
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
       required={required}
-      disabled={disabled}
+      disabled={disabled || loading}
       className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-400 text-gray-700 ${className}`}
     >
-      <option value="">{placeholder}</option>
+      <option value="">{loading ? "Loading..." : placeholder}</option>
       {options.map((option) => (
-        <option key={option.value} value={option.value}>
+        <option key={option.id} value={option.value}>
           {option.label}
         </option>
       ))}
@@ -53,7 +71,22 @@ export const RelationshipSelect: React.FC<
   className = "",
   disabled = false,
 }) => {
-  const options = getRelationshipOptions();
+  const [options, setOptions] = useState<Relationship[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        setLoading(true);
+        const data = await getRelationshipOptions();
+        setOptions(data);
+      } catch (error) {
+        console.error("Error loading relationships:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOptions();
+  }, []);
   const handleChange = (selectedValue: string) => {
     onChange(selectedValue);
     const selectedRelationship = options.find(
@@ -69,12 +102,12 @@ export const RelationshipSelect: React.FC<
       value={value}
       onChange={(e) => handleChange(e.target.value)}
       required={required}
-      disabled={disabled}
+      disabled={disabled || loading}
       className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-400 text-gray-700 ${className}`}
     >
-      <option value="">{placeholder}</option>
+      <option value="">{loading ? "Loading..." : placeholder}</option>
       {options.map((option) => (
-        <option key={option.value_en} value={option.value_en}>
+        <option key={option.id} value={option.value_en}>
           {option.label}
         </option>
       ))}
@@ -96,7 +129,22 @@ export const OccupationSelect: React.FC<
   className = "",
   disabled = false,
 }) => {
-  const options = getOccupationOptions();
+  const [options, setOptions] = useState<Occupation[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        setLoading(true);
+        const data = await getOccupationOptions();
+        setOptions(data);
+      } catch (error) {
+        console.error("Error loading occupations:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOptions();
+  }, []);
   const handleChange = (selectedValue: string) => {
     onChange(selectedValue);
     const selectedOccupation = options.find(
@@ -112,12 +160,12 @@ export const OccupationSelect: React.FC<
       value={value}
       onChange={(e) => handleChange(e.target.value)}
       required={required}
-      disabled={disabled}
+      disabled={disabled || loading}
       className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-400 text-gray-700 ${className}`}
     >
-      <option value="">{placeholder}</option>
+      <option value="">{loading ? "Loading..." : placeholder}</option>
       {options.map((option) => (
-        <option key={option.value_en} value={option.value_en}>
+        <option key={option.id} value={option.value_en}>
           {option.label}
         </option>
       ))}

@@ -1,133 +1,228 @@
-export const BLOOD_GROUPS = [
-  { value: "A+", label: "A+" },
-  { value: "A-", label: "A-" },
-  { value: "B+", label: "B+" },
-  { value: "B-", label: "B-" },
-  { value: "AB+", label: "AB+" },
-  { value: "AB-", label: "AB-" },
-  { value: "O+", label: "O+" },
-  { value: "O-", label: "O-" },
-] as const;
-export const RELATIONSHIPS = [
-  { value_en: "Head", value_ml: "ഗ്രഹനാഥൻ", label: "Head (ഗ്രഹനാഥൻ)" },
-  { value_en: "Father", value_ml: "പിതാവ്", label: "Father (പിതാവ്)" },
-  { value_en: "Mother", value_ml: "മാതാവ്", label: "Mother (മാതാവ്)" },
-  { value_en: "Son", value_ml: "മകൻ", label: "Son (മകൻ)" },
-  { value_en: "Daughter", value_ml: "മകൾ", label: "Daughter (മകൾ)" },
-  { value_en: "Husband", value_ml: "ഭർത്താവ്", label: "Husband (ഭർത്താവ്)" },
-  { value_en: "Wife", value_ml: "ഭാര്യ", label: "Wife (ഭാര്യ)" },
-  { value_en: "Brother", value_ml: "സഹോദരൻ", label: "Brother (സഹോദരൻ)" },
-  { value_en: "Sister", value_ml: "സഹോദരി", label: "Sister (സഹോദരി)" },
+import { createClient } from "@/utils/supabase/client";
+export interface BloodGroup {
+  id: number;
+  value: string;
+  label: string;
+  is_active: boolean;
+  sort_order: number;
+}
+export interface Relationship {
+  id: number;
+  value_en: string;
+  value_ml: string;
+  label: string;
+  is_active: boolean;
+  sort_order: number;
+}
+export interface Occupation {
+  id: number;
+  value_en: string;
+  value_ml: string;
+  label: string;
+  is_active: boolean;
+  sort_order: number;
+}
+let bloodGroupsCache: BloodGroup[] | null = null;
+let relationshipsCache: Relationship[] | null = null;
+let occupationsCache: Occupation[] | null = null;
+const CACHE_DURATION = 5 * 60 * 1000;
+let lastFetchTime = {
+  bloodGroups: 0,
+  relationships: 0,
+  occupations: 0,
+};
+const isCacheValid = (lastFetch: number): boolean => {
+  return Date.now() - lastFetch < CACHE_DURATION;
+};
+export const getBloodGroupOptions = async (): Promise<BloodGroup[]> => {
+  if (bloodGroupsCache && isCacheValid(lastFetchTime.bloodGroups)) {
+    return bloodGroupsCache;
+  }
+  const supabase = createClient();
+  try {
+    const { data, error } = await supabase
+      .from("blood_groups")
+      .select("*")
+      .eq("is_active", true)
+      .order("sort_order");
+    if (error) {
+      console.error("Error fetching blood groups:", error);
+      return getFallbackBloodGroups();
+    }
+    bloodGroupsCache = data;
+    lastFetchTime.bloodGroups = Date.now();
+    return data;
+  } catch (error) {
+    console.error("Error fetching blood groups:", error);
+    return getFallbackBloodGroups();
+  }
+};
+export const getRelationshipOptions = async (): Promise<Relationship[]> => {
+  if (relationshipsCache && isCacheValid(lastFetchTime.relationships)) {
+    return relationshipsCache;
+  }
+  const supabase = createClient();
+  try {
+    const { data, error } = await supabase
+      .from("relationships")
+      .select("*")
+      .eq("is_active", true)
+      .order("sort_order");
+    if (error) {
+      console.error("Error fetching relationships:", error);
+      return getFallbackRelationships();
+    }
+    relationshipsCache = data;
+    lastFetchTime.relationships = Date.now();
+    return data;
+  } catch (error) {
+    console.error("Error fetching relationships:", error);
+    return getFallbackRelationships();
+  }
+};
+export const getOccupationOptions = async (): Promise<Occupation[]> => {
+  if (occupationsCache && isCacheValid(lastFetchTime.occupations)) {
+    return occupationsCache;
+  }
+  const supabase = createClient();
+  try {
+    const { data, error } = await supabase
+      .from("occupations")
+      .select("*")
+      .eq("is_active", true)
+      .order("sort_order");
+    if (error) {
+      console.error("Error fetching occupations:", error);
+      return getFallbackOccupations();
+    }
+    occupationsCache = data;
+    lastFetchTime.occupations = Date.now();
+    return data;
+  } catch (error) {
+    console.error("Error fetching occupations:", error);
+    return getFallbackOccupations();
+  }
+};
+export const findRelationshipByEnglish = async (
+  value_en: string
+): Promise<Relationship | undefined> => {
+  const relationships = await getRelationshipOptions();
+  return relationships.find((rel) => rel.value_en === value_en);
+};
+export const findOccupationByEnglish = async (
+  value_en: string
+): Promise<Occupation | undefined> => {
+  const occupations = await getOccupationOptions();
+  return occupations.find((occ) => occ.value_en === value_en);
+};
+export const findBloodGroup = async (
+  value: string
+): Promise<BloodGroup | undefined> => {
+  const bloodGroups = await getBloodGroupOptions();
+  return bloodGroups.find((bg) => bg.value === value);
+};
+export const refreshBloodGroupsCache = async (): Promise<BloodGroup[]> => {
+  bloodGroupsCache = null;
+  lastFetchTime.bloodGroups = 0;
+  return await getBloodGroupOptions();
+};
+export const refreshRelationshipsCache = async (): Promise<Relationship[]> => {
+  relationshipsCache = null;
+  lastFetchTime.relationships = 0;
+  return await getRelationshipOptions();
+};
+export const refreshOccupationsCache = async (): Promise<Occupation[]> => {
+  occupationsCache = null;
+  lastFetchTime.occupations = 0;
+  return await getOccupationOptions();
+};
+const getFallbackBloodGroups = (): BloodGroup[] => [
+  { id: 1, value: "A+", label: "A+", is_active: true, sort_order: 1 },
+  { id: 2, value: "A-", label: "A-", is_active: true, sort_order: 2 },
+  { id: 3, value: "B+", label: "B+", is_active: true, sort_order: 3 },
+  { id: 4, value: "B-", label: "B-", is_active: true, sort_order: 4 },
+  { id: 5, value: "AB+", label: "AB+", is_active: true, sort_order: 5 },
+  { id: 6, value: "AB-", label: "AB-", is_active: true, sort_order: 6 },
+  { id: 7, value: "O+", label: "O+", is_active: true, sort_order: 7 },
+  { id: 8, value: "O-", label: "O-", is_active: true, sort_order: 8 },
+];
+const getFallbackRelationships = (): Relationship[] => [
   {
-    value_en: "Grandfather",
-    value_ml: "മുത്തച്ഛൻ",
-    label: "Grandfather (മുത്തച്ഛൻ)",
+    id: 1,
+    value_en: "Head of Family (Male)",
+    value_ml: "ഗ്രഹനാഥൻ",
+    label: "Head of Family (Male) (ഗ്രഹനാഥൻ)",
+    is_active: true,
+    sort_order: 1,
   },
   {
-    value_en: "Grandmother",
-    value_ml: "മുത്തശ്ശി",
-    label: "Grandmother (മുത്തശ്ശി)",
-  },
-  { value_en: "Uncle", value_ml: "അമ്മാവൻ", label: "Uncle (അമ്മാവൻ)" },
-  { value_en: "Aunt", value_ml: "അമ്മായി", label: "Aunt (അമ്മായി)" },
-  { value_en: "Nephew", value_ml: "അനന്തരവൻ", label: "Nephew (അനന്തരവൻ)" },
-  { value_en: "Niece", value_ml: "അനന്തരവൾ", label: "Niece (അനന്തരവൾ)" },
-  { value_en: "Son-in-law", value_ml: "മരുമകൻ", label: "Son-in-law (മരുമകൻ)" },
-  {
-    value_en: "Daughter-in-law",
-    value_ml: "മരുമകൾ",
-    label: "Daughter-in-law (മരുമകൾ)",
+    id: 2,
+    value_en: "Father",
+    value_ml: "പിതാവ്",
+    label: "Father (പിതാവ്)",
+    is_active: true,
+    sort_order: 2,
   },
   {
-    value_en: "Father-in-law",
-    value_ml: "അമ്മായിയപ്പൻ",
-    label: "Father-in-law (അമ്മായിയപ്പൻ)",
+    id: 3,
+    value_en: "Mother",
+    value_ml: "മാതാവ്",
+    label: "Mother (മാതാവ്)",
+    is_active: true,
+    sort_order: 3,
   },
   {
-    value_en: "Mother-in-law",
-    value_ml: "അമ്മായിയമ്മ",
-    label: "Mother-in-law (അമ്മായിയമ്മ)",
+    id: 4,
+    value_en: "Son",
+    value_ml: "മകൻ",
+    label: "Son (മകൻ)",
+    is_active: true,
+    sort_order: 4,
   },
-] as const;
-export const OCCUPATIONS = [
   {
+    id: 5,
+    value_en: "Daughter",
+    value_ml: "മകൾ",
+    label: "Daughter (മകൾ)",
+    is_active: true,
+    sort_order: 5,
+  },
+];
+const getFallbackOccupations = (): Occupation[] => [
+  {
+    id: 1,
     value_en: "Student",
     value_ml: "വിദ്യാർത്ഥി",
     label: "Student (വിദ്യാർത്ഥി)",
-  },
-  { value_en: "Teacher", value_ml: "അധ്യാപകൻ", label: "Teacher (അധ്യാപകൻ)" },
-  { value_en: "Doctor", value_ml: "ഡോക്ടർ", label: "Doctor (ഡോക്ടർ)" },
-  { value_en: "Nurse", value_ml: "നഴ്സ്", label: "Nurse (നഴ്സ്)" },
-  {
-    value_en: "Engineer",
-    value_ml: "എഞ്ചിനീയർ",
-    label: "Engineer (എഞ്ചിനീയർ)",
-  },
-  { value_en: "Farmer", value_ml: "കർഷകൻ", label: "Farmer (കർഷകൻ)" },
-  { value_en: "Business", value_ml: "ബിസിനസ്", label: "Business (ബിസിനസ്)" },
-  {
-    value_en: "Government Employee",
-    value_ml: "സർക്കാർ ജീവനക്കാരൻ",
-    label: "Government Employee (സർക്കാർ ജീവനക്കാരൻ)",
+    is_active: true,
+    sort_order: 1,
   },
   {
-    value_en: "Private Employee",
-    value_ml: "സ്വകാര്യ ജീവനക്കാരൻ",
-    label: "Private Employee (സ്വകാര്യ ജീവനക്കാരൻ)",
+    id: 2,
+    value_en: "Teacher",
+    value_ml: "അധ്യാപകൻ",
+    label: "Teacher (അധ്യാപകൻ)",
+    is_active: true,
+    sort_order: 2,
   },
   {
-    value_en: "Retired",
-    value_ml: "വിരമിച്ചവർ",
-    label: "Retired (വിരമിച്ചവർ)",
+    id: 3,
+    value_en: "Doctor",
+    value_ml: "ഡോക്ടർ",
+    label: "Doctor (ഡോക്ടർ)",
+    is_active: true,
+    sort_order: 3,
   },
-  { value_en: "Homemaker", value_ml: "ഗൃഹിണി", label: "Homemaker (ഗൃഹിണി)" },
-  {
-    value_en: "Unemployed",
-    value_ml: "തൊഴിലില്ലാത്തവർ",
-    label: "Unemployed (തൊഴിലില്ലാത്തവർ)",
-  },
-  { value_en: "Lawyer", value_ml: "വക്കീൽ", label: "Lawyer (വക്കീൽ)" },
-  { value_en: "Police", value_ml: "പോലീസ്", label: "Police (പോലീസ്)" },
-  { value_en: "Driver", value_ml: "ഡ്രൈവർ", label: "Driver (ഡ്രൈവർ)" },
-  {
-    value_en: "Mechanic",
-    value_ml: "മെക്കാനിക്",
-    label: "Mechanic (മെക്കാനിക്)",
-  },
-  {
-    value_en: "Electrician",
-    value_ml: "ഇലക്ട്രീഷ്യൻ",
-    label: "Electrician (ഇലക്ട്രീഷ്യൻ)",
-  },
-  {
-    value_en: "Carpenter",
-    value_ml: "മിസ്ത്രി",
-    label: "Carpenter (മിസ്ത്രി)",
-  },
-  { value_en: "Shop Owner", value_ml: "കട ഉടമ", label: "Shop Owner (കട ഉടമ)" },
-  {
-    value_en: "Accountant",
-    value_ml: "അക്കൗണ്ടന്റ്",
-    label: "Accountant (അക്കൗണ്ടന്റ്)",
-  },
-  {
-    value_en: "Bank Employee",
-    value_ml: "ബാങ്ക് ജീവനക്കാരൻ",
-    label: "Bank Employee (ബാങ്ക് ജീവനക്കാരൻ)",
-  },
-  {
-    value_en: "IT Professional",
-    value_ml: "ഐടി പ്രൊഫഷണൽ",
-    label: "IT Professional (ഐടി പ്രൊഫഷണൽ)",
-  },
-  { value_en: "Other", value_ml: "മറ്റുള്ളവ", label: "Other (മറ്റുള്ളവ)" },
-] as const;
-export const getBloodGroupOptions = () => BLOOD_GROUPS;
-export const getRelationshipOptions = () => RELATIONSHIPS;
-export const getOccupationOptions = () => OCCUPATIONS;
-export const findRelationshipByEnglish = (value_en: string) =>
-  RELATIONSHIPS.find((rel) => rel.value_en === value_en);
-export const findOccupationByEnglish = (value_en: string) =>
-  OCCUPATIONS.find((occ) => occ.value_en === value_en);
-export const findBloodGroup = (value: string) =>
-  BLOOD_GROUPS.find((bg) => bg.value === value);
+];
+export const syncConstants = async () => {
+  try {
+    await Promise.all([
+      getBloodGroupOptions(),
+      getRelationshipOptions(),
+      getOccupationOptions(),
+    ]);
+    console.log("Constants synced successfully");
+  } catch (error) {
+    console.error("Error syncing constants:", error);
+  }
+};

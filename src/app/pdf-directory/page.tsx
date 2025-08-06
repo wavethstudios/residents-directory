@@ -20,8 +20,8 @@ type Family = {
   photo_url?: string;
 };
 const formatTextForPDF = (text: string): string => {
-  if (!text) return "N/A";
-  return text.trim() || "N/A";
+  if (!text) return "";
+  return text.trim() || "";
 };
 const containsMalayalam = (text: string): boolean => {
   if (!text) return false;
@@ -29,11 +29,11 @@ const containsMalayalam = (text: string): boolean => {
   return malayalamRegex.test(text);
 };
 const wrapMalayalamText = (text: string): string => {
-  if (!text || text === "N/A") return text;
+  if (!text || text === "") return text;
   return `<span class="malayalam-text">${formatTextForPDF(text)}</span>`;
 };
 const smartFormatText = (text: string): string => {
-  if (!text || text === "N/A") return formatTextForPDF(text);
+  if (!text || text === "") return formatTextForPDF(text);
   const formattedText = formatTextForPDF(text);
   if (containsMalayalam(formattedText)) {
     return `<span class="malayalam-text">${formattedText}</span>`;
@@ -41,7 +41,7 @@ const smartFormatText = (text: string): string => {
   return formattedText;
 };
 const smartFormatMixedText = (text: string): string => {
-  if (!text || text === "N/A") return formatTextForPDF(text);
+  if (!text || text === "") return formatTextForPDF(text);
   const formattedText = formatTextForPDF(text);
   const hasMalayalam = containsMalayalam(formattedText);
   const hasEnglish = /[a-zA-Z0-9]/.test(formattedText);
@@ -127,7 +127,7 @@ const generatePDFHTML = (
               <td class="table-cell name-cell">${nameCell}</td>
               <td class="table-cell relationship-cell">${relationshipCell}</td>
               <td class="table-cell occupation-cell">${occupationCell}</td>
-              <td class="table-cell age-cell">${member.age || "N/A"}</td>
+              <td class="table-cell age-cell">${member.age || ""}</td>
             </tr>
           `;
             })
