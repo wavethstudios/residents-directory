@@ -592,12 +592,26 @@ export default function PDFDirectoryPage() {
           );
           finalData = familiesWithMembers as Family[];
         } else {
-          finalData = (nestedData as Family[]).map((f) => ({
-            ...f,
-            members: (f.members as Member[]) || [],
-            is_on_rent: (f as any).is_on_rent ?? false,
-            owner_name: (f as any).owner_name ?? null,
-          }));
+          finalData = (
+            nestedData as unknown as Array<Record<string, unknown>>
+          ).map((raw) => {
+            const rec = raw;
+            const membersArr = (rec.members as Member[] | undefined) ?? [];
+            const isOnRent = (rec.is_on_rent as boolean | undefined) ?? false;
+            const ownerName =
+              (rec.owner_name as string | null | undefined) ?? null;
+            return {
+              id: String(rec.id ?? ""),
+              house_number: String(rec.house_number ?? ""),
+              address_en: String(rec.address_en ?? ""),
+              address_ml: String(rec.address_ml ?? ""),
+              phone: String(rec.phone ?? ""),
+              photo_url: (rec.photo_url as string | undefined) ?? undefined,
+              members: membersArr,
+              is_on_rent: isOnRent,
+              owner_name: ownerName,
+            } as Family;
+          });
         }
         if (!finalData) {
           throw new Error("No data was received from the database.");

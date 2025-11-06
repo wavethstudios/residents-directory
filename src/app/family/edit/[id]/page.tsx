@@ -108,11 +108,10 @@ export default function EditFamilyPage() {
     }
   }, [id, fetchFamily]);
   const handleFamilyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!family) return;
-    const { name, value, type, checked } = e.target;
+    const { name, value, type, checked } = e.target as HTMLInputElement;
     const newValue: string | boolean = type === "checkbox" ? checked : value;
     setFamily((prev) =>
-      prev ? ({ ...prev, [name]: newValue } as Family) : null
+      prev ? ({ ...prev, [name]: newValue } as unknown as Family) : null
     );
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
@@ -498,7 +497,7 @@ export default function EditFamilyPage() {
             {family.is_on_rent && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Owner's Name <span className="text-red-500">*</span>
+                  Owner&apos;s Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
