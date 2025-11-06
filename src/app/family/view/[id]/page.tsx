@@ -11,6 +11,8 @@ interface Family {
   address_ml: string;
   phone: string;
   photo_url: string | null;
+  is_on_rent?: boolean | null;
+  owner_name?: string | null;
 }
 interface Member {
   id: number;
@@ -57,7 +59,20 @@ export default function FamilyView() {
           setError("Failed to load family members");
           return;
         }
-        setFamily(familyData);
+        const safeFamily: Family = {
+          id: familyData.id,
+          house_number: familyData.house_number,
+          address_en: familyData.address_en,
+          address_ml: familyData.address_ml,
+          phone: familyData.phone,
+          photo_url: familyData.photo_url ?? null,
+          is_on_rent:
+            typeof familyData.is_on_rent === "boolean"
+              ? familyData.is_on_rent
+              : false,
+          owner_name: familyData.owner_name ?? null,
+        };
+        setFamily(safeFamily);
         setMembers(memberData || []);
       } catch (err) {
         console.error("Unexpected error:", err);
@@ -168,6 +183,30 @@ export default function FamilyView() {
                     {members.length === 1 ? "member" : "members"}
                   </p>
                 </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    Tenancy
+                  </h3>
+                  {family.is_on_rent ? (
+                    <p className="text-sm text-red-700">
+                      On rent{" "}
+                      {family.owner_name ? (
+                        <>
+                          — Owner:{" "}
+                          <span className="font-medium text-gray-900">
+                            {family.owner_name}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-gray-600">
+                          (owner not specified)
+                        </span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-green-700">Owner-occupied</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -229,7 +268,7 @@ export default function FamilyView() {
                       ) || "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {headMember.age || "-"}
+                      {headMember.age ?? "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {headMember.blood_group || "-"}
@@ -254,7 +293,7 @@ export default function FamilyView() {
                       ) || "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {member.age || "-"}
+                      {member.age ?? "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {member.blood_group || "-"}

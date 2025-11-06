@@ -17,6 +17,8 @@ interface Family {
   address_ml: string;
   phone: string;
   photo_url: string | null;
+  is_on_rent?: boolean;
+  owner_name?: string | null;
 }
 interface Member {
   id?: number;
@@ -75,8 +77,18 @@ export default function EditFamilyPage() {
           router.push("/families");
           return;
         }
-        setFamily(data);
-        setMembers(data.members || []);
+        const familyData: Family = {
+          id: data.id,
+          house_number: data.house_number,
+          address_en: data.address_en,
+          address_ml: data.address_ml,
+          phone: data.phone,
+          photo_url: data.photo_url ?? null,
+          is_on_rent: data.is_on_rent ?? false,
+          owner_name: data.owner_name ?? null,
+        };
+        setFamily(familyData);
+        setMembers((data.members as Member[]) || []);
         if (data.photo_url) {
           setPreviewUrl(data.photo_url);
         }
@@ -97,8 +109,11 @@ export default function EditFamilyPage() {
   }, [id, fetchFamily]);
   const handleFamilyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!family) return;
-    const { name, value } = e.target;
-    setFamily((prev) => (prev ? { ...prev, [name]: value } : null));
+    const { name, value, type, checked } = e.target;
+    const newValue: string | boolean = type === "checkbox" ? checked : value;
+    setFamily((prev) =>
+      prev ? ({ ...prev, [name]: newValue } as Family) : null
+    );
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
@@ -199,6 +214,9 @@ export default function EditFamilyPage() {
     if (family?.phone && !/^\+?[\d\s\-\(\)]+$/.test(family.phone)) {
       newErrors.phone = "Please enter a valid phone number";
     }
+    if (family?.is_on_rent && !(family.owner_name || "").trim()) {
+      newErrors.owner_name = "Owner's name is required when rented";
+    }
     members.forEach((member, index) => {
       if (member.is_head) {
         if (!member.name_en.trim()) {
@@ -257,6 +275,11 @@ export default function EditFamilyPage() {
           address_ml: family.address_ml,
           phone: family.phone,
           photo_url: photoUrl,
+          is_on_rent: family.is_on_rent ?? false,
+          owner_name:
+            family.owner_name && family.owner_name.trim()
+              ? family.owner_name
+              : null,
         })
         .eq("id", family.id);
       if (familyError) {
@@ -267,16 +290,16 @@ export default function EditFamilyPage() {
         .from("members")
         .select("id")
         .eq("family_id", family.id);
-      const existingIds = (existingMembers || []).map((m) => m.id);
+      const existingIds = (existingMembers || []).map((m: any) => m.id);
       const validMembers = members.filter((member) => {
         if (member.is_head) return true;
         return member.name_en.trim() !== "";
       });
       const membersToUpdate = validMembers.filter((m) => m.id);
       const membersToInsert = validMembers.filter((m) => !m.id);
-      const currentIds = membersToUpdate.map((m) => m.id);
+      const currentIds = membersToUpdate.map((m) => m.id) as number[];
       const memberIdsToDelete = existingIds.filter(
-        (id) => !currentIds.includes(id)
+        (mid: number) => !currentIds.includes(mid)
       );
       for (const member of membersToUpdate) {
         const { error } = await supabase
@@ -458,6 +481,42 @@ export default function EditFamilyPage() {
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 text-gray-700"
               />
             </div>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="is_on_rent"
+                  checked={!!family.is_on_rent}
+                  onChange={handleFamilyChange}
+                  className="form-checkbox h-4 w-4"
+                />
+                <span className="text-sm text-gray-700">
+                  Is the family on rent?
+                </span>
+              </label>
+            </div>
+            {family.is_on_rent && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Owner's Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="owner_name"
+                  placeholder="Enter owner's name"
+                  value={family.owner_name || ""}
+                  onChange={handleFamilyChange}
+                  className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 text-gray-700 ${
+                    errors.owner_name ? "border-red-500" : "border-gray-300"
+                  }`}
+                />
+                {errors.owner_name && (
+                  <span className="text-red-500 text-sm mt-1">
+                    {errors.owner_name}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="bg-white rounded-lg shadow p-6">

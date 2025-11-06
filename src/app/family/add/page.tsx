@@ -25,6 +25,8 @@ interface Family {
   address_en: string;
   address_ml: string;
   phone: string;
+  isOnRent: boolean;
+  ownerName: string;
 }
 const INITIAL_MEMBER: FamilyMember = {
   name_en: "",
@@ -42,6 +44,8 @@ const INITIAL_FAMILY: Family = {
   address_en: "",
   address_ml: "",
   phone: "",
+  isOnRent: false,
+  ownerName: "",
 };
 export default function AddFamily() {
   const supabase = createClient();
@@ -63,8 +67,9 @@ export default function AddFamily() {
     }
   }, [photoFile]);
   const handleFamilyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFamily((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target as HTMLInputElement;
+    const newValue: string | boolean = type === "checkbox" ? checked : value;
+    setFamily((prev) => ({ ...prev, [name]: newValue } as any));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
@@ -146,6 +151,9 @@ export default function AddFamily() {
     if (family.phone && !/^\+?[\d\s\-\(\)]+$/.test(family.phone)) {
       newErrors.phone = "Please enter a valid phone number";
     }
+    if (family.isOnRent && !family.ownerName.trim()) {
+      newErrors.ownerName = "Owner's name is required when rented";
+    }
     members.forEach((member, index) => {
       if (member.is_head) {
         if (!member.name_en.trim()) {
@@ -202,6 +210,8 @@ export default function AddFamily() {
             address_ml: family.address_ml,
             phone: family.phone,
             photo_url,
+            is_on_rent: family.isOnRent,
+            owner_name: family.ownerName || null,
           },
         ])
         .select()
@@ -331,6 +341,42 @@ export default function AddFamily() {
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 text-gray-700"
               />
             </div>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="isOnRent"
+                  checked={family.isOnRent}
+                  onChange={handleFamilyChange}
+                  className="form-checkbox h-4 w-4"
+                />
+                <span className="text-sm text-gray-700">
+                  Is the family on rent?
+                </span>
+              </label>
+            </div>
+            {family.isOnRent && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Owner's Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="ownerName"
+                  placeholder="Enter owner's name"
+                  value={family.ownerName}
+                  onChange={handleFamilyChange}
+                  className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 text-gray-700 ${
+                    errors.ownerName ? "border-red-500" : "border-gray-300"
+                  }`}
+                />
+                {errors.ownerName && (
+                  <span className="text-red-500 text-sm mt-1">
+                    {errors.ownerName}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="bg-white rounded-lg shadow p-6">

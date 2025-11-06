@@ -18,6 +18,8 @@ type Family = {
   phone: string;
   members: Member[];
   photo_url?: string;
+  is_on_rent?: boolean | null;
+  owner_name?: string | null;
 };
 const formatTextForPDF = (text: string): string => {
   if (!text) return "";
@@ -163,6 +165,45 @@ const generatePDFHTML = (
       return content;
     })();
     const houseNumberContent = smartFormatMixedText(family.house_number);
+    const tenancyContent = (() => {
+      const tenancyEn = "Tenancy";
+      const tenancyMl = wrapMalayalamText("വാടക");
+      const onRentEn = "On rent";
+      const onRentMl = wrapMalayalamText("വാടകയിൽ");
+      const ownerLabelEn = "Owner";
+      const ownerLabelMl = wrapMalayalamText("ഉടമസ്ഥൻ");
+      const ownerMissingEn = "(owner not specified)";
+      const ownerMissingMl = wrapMalayalamText("ഉടമസ്ഥൻ നിർദ്ദിഷ്ടമല്ല");
+      const ownerOccupiedEn = "Owner-occupied";
+      const ownerOccupiedMl = wrapMalayalamText("സ്വന്തം");
+      if (family.is_on_rent) {
+        const ownerDisplay = family.owner_name
+          ? smartFormatText(family.owner_name)
+          : `${ownerMissingEn} ${ownerMissingMl}`;
+        if (language === "both") {
+          return `<div class="tenancy">${tenancyEn} / ${tenancyMl}: <span class="tenant-status">${onRentEn} / ${onRentMl}</span> — ${ownerLabelEn} / ${ownerLabelMl}: ${ownerDisplay}</div>`;
+        }
+        if (language === "malayalam") {
+          return `<div class="tenancy">${tenancyMl}: <span class="tenant-status">${onRentMl}</span> — ${ownerLabelMl}: ${
+            family.owner_name
+              ? wrapMalayalamText(family.owner_name)
+              : ownerMissingMl
+          }</div>`;
+        }
+        return `<div class="tenancy">${tenancyEn}: <span class="tenant-status">${onRentEn}</span> — ${ownerLabelEn}: ${
+          family.owner_name
+            ? smartFormatText(family.owner_name)
+            : ownerMissingEn
+        }</div>`;
+      }
+      if (language === "both") {
+        return `<div class="tenancy">${tenancyEn} / ${tenancyMl}: <span class="tenant-status owner-occupied">${ownerOccupiedEn} / ${ownerOccupiedMl}</span></div>`;
+      }
+      if (language === "malayalam") {
+        return `<div class="tenancy">${tenancyMl}:<span class="tenant-status owner-occupied">${ownerOccupiedMl}</span></div>`;
+      }
+      return `<div class="tenancy">${tenancyEn}: <span class="tenant-status owner-occupied">${ownerOccupiedEn}</span></div>`;
+    })();
     const tableHeaders = (() => {
       if (language === "malayalam") {
         return `
@@ -193,7 +234,8 @@ const generatePDFHTML = (
           <div class="family-info">
             <div class="house-number">${houseNumberContent}</div>
             ${addressContent}
-            <div class="phone">${family.phone}</div>
+            <div class="phone">${family.phone || ""}</div>
+            ${tenancyContent}
           </div>
           <div class="photo-container">
             ${
@@ -312,7 +354,6 @@ const generatePDFHTML = (
           margin-bottom: 8px;
           line-height: 1.4;
         }
-        /* Enhanced house number styling for Malayalam */
         .house-number .malayalam-text {
           font-size: 19px !important;
           font-weight: 700;
@@ -334,6 +375,28 @@ const generatePDFHTML = (
           font-size: 11px;
           color: #475569;
           font-weight: 600;
+        }
+        .tenancy {
+          margin-top: 8px;
+          font-size: 10px;
+          color: #334155;
+        }
+        .tenant-status {
+          font-weight: 600;
+          margin-left: 6px;
+        }
+        .tenant-status.owner-occupied {
+          color: #16a34a;
+        }
+        .owner-name {
+          font-weight: 700;
+          color: #0f172a;
+          margin-left: 6px;
+        }
+        .owner-missing {
+          color: #64748b;
+          font-style: italic;
+          margin-left: 6px;
         }
         .photo-container {
           width: 80px;
@@ -522,12 +585,19 @@ export default function PDFDirectoryPage() {
               return {
                 ...family,
                 members: membersData || [],
+                is_on_rent: family.is_on_rent ?? false,
+                owner_name: family.owner_name ?? null,
               };
             })
           );
           finalData = familiesWithMembers as Family[];
         } else {
-          finalData = nestedData as Family[];
+          finalData = (nestedData as Family[]).map((f) => ({
+            ...f,
+            members: (f.members as Member[]) || [],
+            is_on_rent: (f as any).is_on_rent ?? false,
+            owner_name: (f as any).owner_name ?? null,
+          }));
         }
         if (!finalData) {
           throw new Error("No data was received from the database.");
