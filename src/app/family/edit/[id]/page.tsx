@@ -289,7 +289,9 @@ export default function EditFamilyPage() {
         .from("members")
         .select("id")
         .eq("family_id", family.id);
-      const existingIds = (existingMembers || []).map((m: any) => m.id);
+      const existingIds = (existingMembers || []).map(
+        (m: { id: number }) => m.id
+      );
       const validMembers = members.filter((member) => {
         if (member.is_head) return true;
         return member.name_en.trim() !== "";
