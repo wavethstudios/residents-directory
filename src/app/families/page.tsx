@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+
 const SearchIcon = () => (
   <svg
     className="w-4 h-4"
@@ -18,6 +19,7 @@ const SearchIcon = () => (
     />
   </svg>
 );
+
 interface Family {
   id: number;
   house_number: string;
@@ -26,6 +28,23 @@ interface Family {
   phone: string;
   photo_url: string | null;
 }
+
+// Alphanumeric house number sort: 1, 2, 10, 25, 25A, 25B, 100
+const sortByHouseNumber = (data: Family[], order: "asc" | "desc"): Family[] => {
+  return [...data].sort((a, b) => {
+    const parse = (h: string) => {
+      const num = parseInt(h) || 0;
+      const alpha = h.replace(/[0-9]/g, "").trim().toLowerCase();
+      return { num, alpha };
+    };
+    const pa = parse(a.house_number);
+    const pb = parse(b.house_number);
+    const result =
+      pa.num !== pb.num ? pa.num - pb.num : pa.alpha.localeCompare(pb.alpha);
+    return order === "asc" ? result : -result;
+  });
+};
+
 export default function FamiliesTablePage() {
   const supabase = createClient();
   const [families, setFamilies] = useState<Family[]>([]);
@@ -38,32 +57,110 @@ export default function FamiliesTablePage() {
   const [pageSize, setPageSize] = useState(10);
   const [sortBy, setSortBy] = useState("house_number");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
   const fetchFamilies = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
-      let query = supabase.from("families").select("*", { count: "exact" });
-      if (activeSearch && activeSearch.trim()) {
-        const searchTerm = `%${activeSearch.trim()}%`;
-        query = query.or(
-          `house_number.ilike.${searchTerm},` +
-            `address_en.ilike.${searchTerm},` +
-            `address_ml.ilike.${searchTerm},` +
-            `phone.ilike.${searchTerm}`
+
+      const search = activeSearch.trim();
+
+      if (search) {
+        const searchTerm = `%${search}%`;
+
+        // Search families by house number, address, phone
+        const { data: familyMatches, error: familyError } = await supabase
+          .from("families")
+          .select("*")
+          .or(
+            `house_number.ilike.${searchTerm},` +
+              `address_en.ilike.${searchTerm},` +
+              `address_ml.ilike.${searchTerm},` +
+              `phone.ilike.${searchTerm}`,
+          );
+
+        if (familyError) throw new Error(familyError.message);
+
+        // Search members by name, get their family_ids
+        const { data: memberMatches, error: memberError } = await supabase
+          .from("members")
+          .select("family_id")
+          .or(`name_en.ilike.${searchTerm},name_ml.ilike.${searchTerm}`);
+
+        if (memberError) throw new Error(memberError.message);
+
+        // Collect unique family IDs from member matches
+        const memberFamilyIds = [
+          ...new Set((memberMatches || []).map((m) => m.family_id)),
+        ];
+
+        // Fetch families matched by member names (not already in familyMatches)
+        let memberFamilies: Family[] = [];
+        if (memberFamilyIds.length > 0) {
+          const existingIds = new Set((familyMatches || []).map((f) => f.id));
+          const newIds = memberFamilyIds.filter((id) => !existingIds.has(id));
+          if (newIds.length > 0) {
+            const { data: mfData, error: mfError } = await supabase
+              .from("families")
+              .select("*")
+              .in("id", newIds);
+            if (mfError) throw new Error(mfError.message);
+            memberFamilies = mfData || [];
+          }
+        }
+
+        const combined = [
+          ...(familyMatches || []),
+          ...memberFamilies,
+        ] as Family[];
+        const sorted = sortByHouseNumber(
+          combined,
+          sortBy === "house_number" ? sortOrder : "asc",
         );
+
+        // Client-side pagination
+        const total = sorted.length;
+        const from = (currentPage - 1) * pageSize;
+        const paginated = sorted.slice(from, from + pageSize);
+
+        setFamilies(paginated);
+        setTotalCount(total);
+      } else {
+        // No search — standard paginated fetch
+        let query = supabase.from("families").select("*", { count: "exact" });
+
+        // For non-house_number sorts, let Supabase handle it
+        if (sortBy !== "house_number") {
+          query = query.order(sortBy, { ascending: sortOrder === "asc" });
+        } else {
+          // Fetch all for client-side sort, then paginate
+          const {
+            data: allData,
+            error: allError,
+            count,
+          } = await supabase.from("families").select("*", { count: "exact" });
+
+          if (allError) throw new Error(allError.message);
+
+          const sorted = sortByHouseNumber(allData || [], sortOrder);
+          const from = (currentPage - 1) * pageSize;
+          const paginated = sorted.slice(from, from + pageSize);
+
+          setFamilies(paginated);
+          setTotalCount(count || 0);
+          return;
+        }
+
+        const from = (currentPage - 1) * pageSize;
+        const to = from + pageSize - 1;
+        query = query.range(from, to);
+
+        const { data, error: fetchError, count } = await query;
+        if (fetchError) throw new Error(fetchError.message);
+
+        setFamilies(data || []);
+        setTotalCount(count || 0);
       }
-      query = query.order(sortBy, { ascending: sortOrder === "asc" });
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-      const { data, error: fetchError, count } = await query;
-      if (fetchError) {
-        console.error("Error fetching families:", fetchError.message);
-        setError("Failed to load families");
-        return;
-      }
-      setFamilies(data || []);
-      setTotalCount(count || 0);
     } catch (err) {
       console.error("Unexpected error:", err);
       setError("An unexpected error occurred");
@@ -71,42 +168,41 @@ export default function FamiliesTablePage() {
       setIsLoading(false);
     }
   }, [activeSearch, sortBy, sortOrder, currentPage, pageSize, supabase]);
+
   useEffect(() => {
     fetchFamilies();
   }, [fetchFamilies]);
+
   const deletePhoto = async (photoUrl: string): Promise<void> => {
     if (!photoUrl) return;
     try {
       const url = new URL(photoUrl);
       const filePath = url.pathname.replace(
         "/storage/v1/object/public/family-photos/",
-        ""
+        "",
       );
       const { error: storageError } = await supabase.storage
         .from("family-photos")
         .remove([filePath]);
-      if (storageError) {
+      if (storageError)
         console.warn("Photo delete failed:", storageError.message);
-      }
     } catch (error) {
       console.warn("Invalid photo URL or deletion failed:", photoUrl, error);
     }
   };
+
   const handleDelete = async (family: Family) => {
     const confirmDelete = window.confirm(
-      `Are you sure you want to delete the family at House No: ${family.house_number}?\nThis action cannot be undone.`
+      `Are you sure you want to delete the family at House No: ${family.house_number}?\nThis action cannot be undone.`,
     );
     if (!confirmDelete) return;
     try {
-      if (family.photo_url) {
-        await deletePhoto(family.photo_url);
-      }
+      if (family.photo_url) await deletePhoto(family.photo_url);
       const { error: deleteError } = await supabase
         .from("families")
         .delete()
         .eq("id", family.id);
       if (deleteError) {
-        console.error("Delete error:", deleteError.message);
         alert("Failed to delete family: " + deleteError.message);
         return;
       }
@@ -117,6 +213,7 @@ export default function FamiliesTablePage() {
       alert("An unexpected error occurred while deleting the family");
     }
   };
+
   const handleSort = (column: string) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -126,28 +223,28 @@ export default function FamiliesTablePage() {
     }
     setCurrentPage(1);
   };
+
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setActiveSearch(searchInput);
     setCurrentPage(1);
   };
+
   const handleSearchClear = () => {
     setSearchInput("");
     setActiveSearch("");
     setCurrentPage(1);
   };
-  const handleSearchKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSearchSubmit();
-    }
-  };
+
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize);
     setCurrentPage(1);
   };
+
   const totalPages = Math.ceil(totalCount / pageSize);
   const startIndex = (currentPage - 1) * pageSize + 1;
   const endIndex = Math.min(currentPage * pageSize, totalCount);
+
   if (isLoading && families.length === 0) {
     return (
       <div className="max-w-6xl mx-auto p-6">
@@ -155,6 +252,7 @@ export default function FamiliesTablePage() {
       </div>
     );
   }
+
   if (error) {
     return (
       <div className="max-w-6xl mx-auto p-6">
@@ -170,6 +268,7 @@ export default function FamiliesTablePage() {
       </div>
     );
   }
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -181,6 +280,7 @@ export default function FamiliesTablePage() {
           Add New Family
         </Link>
       </div>
+
       <div className="bg-white rounded-lg shadow-sm border p-4 space-y-4">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex-1 max-w-md">
@@ -188,10 +288,9 @@ export default function FamiliesTablePage() {
               <div className="relative flex-1">
                 <input
                   type="text"
-                  placeholder="Search by house number, address, or phone..."
+                  placeholder="Search by house number, address, phone, or name..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyPress={handleSearchKeyPress}
                   className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-400 text-gray-700"
                 />
                 {searchInput && (
@@ -240,6 +339,7 @@ export default function FamiliesTablePage() {
             <span className="text-sm text-gray-600">per page</span>
           </div>
         </div>
+
         <div className="text-sm text-gray-600">
           {totalCount === 0 ? (
             "No families found"
@@ -256,6 +356,7 @@ export default function FamiliesTablePage() {
           )}
         </div>
       </div>
+
       {families.length === 0 && !activeSearch ? (
         <div className="text-center py-8">
           <div className="text-gray-500 mb-4">No families found.</div>
@@ -289,19 +390,40 @@ export default function FamiliesTablePage() {
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                       onClick={() => handleSort("house_number")}
                     >
-                      <div className="flex items-center gap-1">House No</div>
+                      <div className="flex items-center gap-1">
+                        House No
+                        {sortBy === "house_number" && (
+                          <span className="text-blue-500">
+                            {sortOrder === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
                     </th>
                     <th
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                       onClick={() => handleSort("address_en")}
                     >
-                      <div className="flex items-center gap-1">Address</div>
+                      <div className="flex items-center gap-1">
+                        Address
+                        {sortBy === "address_en" && (
+                          <span className="text-blue-500">
+                            {sortOrder === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
                     </th>
                     <th
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                       onClick={() => handleSort("phone")}
                     >
-                      <div className="flex items-center gap-1">Phone</div>
+                      <div className="flex items-center gap-1">
+                        Phone
+                        {sortBy === "phone" && (
+                          <span className="text-blue-500">
+                            {sortOrder === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
                     </th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -362,6 +484,7 @@ export default function FamiliesTablePage() {
               </table>
             </div>
           </div>
+
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600">
@@ -387,15 +510,11 @@ export default function FamiliesTablePage() {
                 <div className="flex gap-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNum;
-                    if (totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
+                    if (totalPages <= 5) pageNum = i + 1;
+                    else if (currentPage <= 3) pageNum = i + 1;
+                    else if (currentPage >= totalPages - 2)
                       pageNum = totalPages - 4 + i;
-                    } else {
-                      pageNum = currentPage - 2 + i;
-                    }
+                    else pageNum = currentPage - 2 + i;
                     return (
                       <button
                         key={pageNum}
@@ -432,9 +551,10 @@ export default function FamiliesTablePage() {
           )}
         </>
       )}
+
       {isLoading && families.length > 0 && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg px-4 py-2 shadow-lg text-gray-700 ">
+          <div className="bg-white rounded-lg px-4 py-2 shadow-lg text-gray-700">
             Loading...
           </div>
         </div>

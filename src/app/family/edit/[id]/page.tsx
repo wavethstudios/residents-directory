@@ -1,15 +1,18 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { X, Upload, User, Home, ArrowLeft } from "lucide-react";
+import { X, Upload, User, Home, ArrowLeft, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import {
-  BloodGroupSelect,
-  OccupationSelect,
-  RelationshipSelect,
-} from "@/components/ui/SelectFields";
 import Image from "next/image";
+import {
+  getRelationshipOptions,
+  getOccupationOptions,
+  getBloodGroupOptions,
+  type Relationship,
+  type Occupation,
+  type BloodGroup,
+} from "@/lib/constants";
 interface Family {
   id: number;
   house_number: string;
@@ -29,9 +32,43 @@ interface Member {
   occupation_en: string;
   occupation_ml: string;
   age: string;
+  dob: string;
+  ageInputMode: "age" | "dob";
   blood_group: string;
   is_head: boolean;
   family_id?: number;
+}
+function calculateAge(dob: string): string {
+  if (!dob) return "";
+  const birth = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age >= 0 ? String(age) : "";
+}
+/** Convert a raw DB member row into the Member shape used by this component */
+function toMember(raw: Record<string, unknown>): Member {
+  const hasDob = typeof raw.dob === "string" && raw.dob !== "";
+  return {
+    id: raw.id as number | undefined,
+    family_id: raw.family_id as number | undefined,
+    name_en: (raw.name_en as string) || "",
+    name_ml: (raw.name_ml as string) || "",
+    relationship_en: (raw.relationship_en as string) || "",
+    relationship_ml: (raw.relationship_ml as string) || "",
+    occupation_en: (raw.occupation_en as string) || "",
+    occupation_ml: (raw.occupation_ml as string) || "",
+    blood_group: (raw.blood_group as string) || "",
+    is_head: (raw.is_head as boolean) || false,
+    dob: hasDob ? (raw.dob as string) : "",
+    age: hasDob
+      ? calculateAge(raw.dob as string)
+      : raw.age != null
+        ? String(raw.age)
+        : "",
+    ageInputMode: hasDob ? "dob" : "age",
+  };
 }
 const INITIAL_MEMBER: Omit<Member, "id" | "family_id"> = {
   name_en: "",
@@ -41,9 +78,152 @@ const INITIAL_MEMBER: Omit<Member, "id" | "family_id"> = {
   occupation_en: "",
   occupation_ml: "",
   age: "",
+  dob: "",
+  ageInputMode: "age",
   blood_group: "",
   is_head: false,
 };
+interface ComboboxOption {
+  en: string;
+  ml: string;
+}
+interface ComboboxProps {
+  options: ComboboxOption[];
+  valueEn: string;
+  valueMl: string;
+  placeholder: string;
+  onChangeEn: (v: string) => void;
+  onChangeMl: (v: string) => void;
+}
+function BilingualCombobox({
+  options,
+  valueEn,
+  valueMl,
+  placeholder,
+  onChangeEn,
+  onChangeMl,
+}: ComboboxProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(valueEn);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setQuery(valueEn);
+  }, [valueEn]);
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+  const filtered = query
+    ? options.filter(
+        (o) =>
+          o.en.toLowerCase().includes(query.toLowerCase()) ||
+          o.ml.includes(query),
+      )
+    : options;
+  function selectOption(en: string, ml: string) {
+    setQuery(en);
+    onChangeEn(en);
+    onChangeMl(ml);
+    setOpen(false);
+  }
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
+    setQuery(v);
+    onChangeEn(v);
+    const match = options.find((o) => o.en.toLowerCase() === v.toLowerCase());
+    onChangeMl(match ? match.ml : "");
+    setOpen(true);
+  }
+  const isCustomValue =
+    query.trim() !== "" &&
+    !options.some((o) => o.en.toLowerCase() === query.toLowerCase());
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          value={query}
+          onChange={handleInputChange}
+          onFocus={() => setOpen(true)}
+          placeholder={placeholder}
+          className="w-full border border-gray-300 rounded-md px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 text-gray-700"
+        />
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          tabIndex={-1}
+        >
+          <ChevronDown size={16} />
+        </button>
+      </div>
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-52 overflow-y-auto">
+          {filtered.map((opt) => (
+            <li
+              key={opt.en}
+              onMouseDown={() => selectOption(opt.en, opt.ml)}
+              className={`px-3 py-2 cursor-pointer hover:bg-blue-50 flex justify-between items-center ${
+                valueEn === opt.en ? "bg-blue-50 font-medium" : ""
+              }`}
+            >
+              <span className="text-gray-800">{opt.en}</span>
+              <span className="text-gray-400 text-xs ml-2">{opt.ml}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {isCustomValue && (
+        <div className="mt-1">
+          <input
+            type="text"
+            value={valueMl}
+            onChange={(e) => onChangeMl(e.target.value)}
+            placeholder="മലയാളം"
+            className="w-full border border-blue-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-400 text-gray-700 bg-blue-50"
+          />
+          <p className="text-xs text-blue-500 mt-0.5">
+            Custom value — enter Malayalam translation
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+function BloodGroupSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [options, setOptions] = useState<BloodGroup[]>([]);
+  useEffect(() => {
+    getBloodGroupOptions().then(setOptions);
+  }, []);
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+    >
+      <option value="">Select blood group</option>
+      {options.map((bg) => (
+        <option key={bg.id} value={bg.value}>
+          {bg.label}
+        </option>
+      ))}
+    </select>
+  );
+}
 export default function EditFamilyPage() {
   const supabase = createClient();
   const { id } = useParams();
@@ -56,6 +236,24 @@ export default function EditFamilyPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [relationshipOptions, setRelationshipOptions] = useState<
+    ComboboxOption[]
+  >([]);
+  const [occupationOptions, setOccupationOptions] = useState<ComboboxOption[]>(
+    [],
+  );
+  useEffect(() => {
+    getRelationshipOptions().then((data: Relationship[]) =>
+      setRelationshipOptions(
+        data.map((r) => ({ en: r.value_en, ml: r.value_ml })),
+      ),
+    );
+    getOccupationOptions().then((data: Occupation[]) =>
+      setOccupationOptions(
+        data.map((o) => ({ en: o.value_en, ml: o.value_ml })),
+      ),
+    );
+  }, []);
   useEffect(() => {
     if (photoFile) {
       const url = URL.createObjectURL(photoFile);
@@ -77,7 +275,7 @@ export default function EditFamilyPage() {
           router.push("/families");
           return;
         }
-        const familyData: Family = {
+        setFamily({
           id: data.id,
           house_number: data.house_number,
           address_en: data.address_en,
@@ -86,12 +284,17 @@ export default function EditFamilyPage() {
           photo_url: data.photo_url ?? null,
           is_on_rent: data.is_on_rent ?? false,
           owner_name: data.owner_name ?? null,
-        };
-        setFamily(familyData);
-        setMembers((data.members as Member[]) || []);
-        if (data.photo_url) {
-          setPreviewUrl(data.photo_url);
-        }
+        });
+        const rawMembers = (
+          (data.members as Record<string, unknown>[]) || []
+        ).map(toMember);
+        rawMembers.sort((a, b) => {
+          if (a.is_head && !b.is_head) return -1;
+          if (!a.is_head && b.is_head) return 1;
+          return (a.id ?? 0) - (b.id ?? 0);
+        });
+        setMembers(rawMembers);
+        if (data.photo_url) setPreviewUrl(data.photo_url);
       } catch (error) {
         console.error("Unexpected error:", error);
         alert("An unexpected error occurred.");
@@ -100,63 +303,66 @@ export default function EditFamilyPage() {
         setIsLoading(false);
       }
     },
-    [router, supabase]
+    [router, supabase],
   );
   useEffect(() => {
-    if (id && typeof id === "string") {
-      fetchFamily(id);
-    }
+    if (id && typeof id === "string") fetchFamily(id);
   }, [id, fetchFamily]);
   const handleFamilyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target as HTMLInputElement;
+    const { name, value, type, checked } = e.target;
     const newValue: string | boolean = type === "checkbox" ? checked : value;
     setFamily((prev) =>
-      prev ? ({ ...prev, [name]: newValue } as unknown as Family) : null
+      prev ? ({ ...prev, [name]: newValue } as Family) : null,
     );
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: "" }));
-    }
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
   };
   const handleMemberChange = <K extends keyof Member>(
     index: number,
     field: K,
-    value: Member[K]
+    value: Member[K],
   ) => {
     setMembers((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
+      if (field === "dob") {
+        updated[index].age = calculateAge(value as string);
+      }
       return updated;
     });
     const errorKey = `member_${index}_${field}`;
-    if (errors[errorKey]) {
-      setErrors((prev) => ({ ...prev, [errorKey]: "" }));
-    }
+    if (errors[errorKey]) setErrors((prev) => ({ ...prev, [errorKey]: "" }));
   };
-  const addMember = () => {
+  const toggleAgeMode = (index: number, mode: "age" | "dob") => {
+    setMembers((prev) => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        ageInputMode: mode,
+        age: "",
+        dob: "",
+      };
+      return updated;
+    });
+  };
+  const addMember = () =>
     setMembers((prev) => [...prev, { ...INITIAL_MEMBER }]);
-  };
   const removeMember = (index: number) => {
-    const member = members[index];
-    if (member.is_head) return;
+    if (members[index].is_head) return;
     setMembers((prev) => prev.filter((_, i) => i !== index));
     const newErrors = { ...errors };
     Object.keys(newErrors).forEach((key) => {
-      if (key.startsWith(`member_${index}_`)) {
-        delete newErrors[key];
-      }
+      if (key.startsWith(`member_${index}_`)) delete newErrors[key];
     });
     setErrors(newErrors);
   };
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
       alert("Only JPG, PNG, or WEBP images are allowed.");
       return;
     }
-    const maxSize = 1 * 1024 * 1024;
-    if (file.size > maxSize) {
+    if (file.size > 1 * 1024 * 1024) {
       alert("File size must be under 1MB.");
       return;
     }
@@ -176,62 +382,51 @@ export default function EditFamilyPage() {
     const { error: uploadError } = await supabase.storage
       .from("family-photos")
       .upload(filePath, photoFile);
-    if (uploadError) {
-      console.error("Photo upload error:", uploadError.message);
-      throw new Error("Photo upload failed");
-    }
-    const { data: publicUrlData } = supabase.storage
+    if (uploadError) throw new Error("Photo upload failed");
+    const { data } = supabase.storage
       .from("family-photos")
       .getPublicUrl(filePath);
-    return publicUrlData.publicUrl;
+    return data.publicUrl;
   };
   const deleteOldPhoto = async (photoUrl: string) => {
     try {
       const url = new URL(photoUrl);
       const filePath = url.pathname.replace(
         "/storage/v1/object/public/family-photos/",
-        ""
+        "",
       );
       const { error } = await supabase.storage
         .from("family-photos")
         .remove([filePath]);
-      if (error) {
-        console.warn("Failed to delete old photo:", error.message);
-      }
+      if (error) console.warn("Failed to delete old photo:", error.message);
     } catch (error) {
       console.warn("Failed to parse photo URL for deletion:", error);
     }
   };
   const validateForm = (): boolean => {
     const newErrors: { [key: string]: string } = {};
-    if (!family?.house_number?.trim()) {
+    if (!family?.house_number?.trim())
       newErrors.house_number = "House number is required";
-    }
-    if (!family?.address_en?.trim()) {
+    if (!family?.address_en?.trim())
       newErrors.address_en = "Address (English) is required";
-    }
-    if (family?.phone && !/^\+?[\d\s\-\(\)]+$/.test(family.phone)) {
+    if (family?.phone && !/^\+?[\d\s\-\(\)]+$/.test(family.phone))
       newErrors.phone = "Please enter a valid phone number";
-    }
-    if (family?.is_on_rent && !(family.owner_name || "").trim()) {
+    if (family?.is_on_rent && !(family.owner_name || "").trim())
       newErrors.owner_name = "Owner's name is required when rented";
-    }
     members.forEach((member, index) => {
       if (member.is_head) {
-        if (!member.name_en.trim()) {
+        if (!member.name_en.trim())
           newErrors[`member_${index}_name_en`] =
             "Main member name (English) is required";
-        }
       } else {
         const hasAnyField = Object.entries(member).some(([key, value]) => {
-          if (key === "is_head" || key === "id" || key === "family_id")
+          if (["is_head", "id", "family_id", "ageInputMode"].includes(key))
             return false;
           return typeof value === "string" && value.trim() !== "";
         });
-        if (hasAnyField && !member.name_en.trim()) {
+        if (hasAnyField && !member.name_en.trim())
           newErrors[`member_${index}_name_en`] =
             "Name (English) is required when adding member details";
-        }
       }
       if (
         member.age &&
@@ -239,14 +434,7 @@ export default function EditFamilyPage() {
           Number(member.age) < 0 ||
           Number(member.age) > 150)
       ) {
-        newErrors[`member_${index}_age`] = "Please enter a valid age (0-150)";
-      }
-      if (
-        member.blood_group &&
-        !/^(A|B|AB|O)[+-]?$/i.test(member.blood_group.trim())
-      ) {
-        newErrors[`member_${index}_blood_group`] =
-          "Please enter a valid blood group (e.g., A+, O-, AB)";
+        newErrors[`member_${index}_age`] = "Please enter a valid age (0–150)";
       }
     });
     setErrors(newErrors);
@@ -258,9 +446,7 @@ export default function EditFamilyPage() {
     try {
       let photoUrl = family.photo_url;
       if (photoFile) {
-        if (family.photo_url) {
-          await deleteOldPhoto(family.photo_url);
-        }
+        if (family.photo_url) await deleteOldPhoto(family.photo_url);
         photoUrl = await uploadPhoto();
       } else if (shouldRemovePhoto && family.photo_url) {
         await deleteOldPhoto(family.photo_url);
@@ -275,32 +461,25 @@ export default function EditFamilyPage() {
           phone: family.phone,
           photo_url: photoUrl,
           is_on_rent: family.is_on_rent ?? false,
-          owner_name:
-            family.owner_name && family.owner_name.trim()
-              ? family.owner_name
-              : null,
+          owner_name: family.owner_name?.trim() || null,
         })
         .eq("id", family.id);
-      if (familyError) {
-        console.error("Family update error:", familyError.message);
-        throw new Error("Failed to update family information");
-      }
+      if (familyError) throw new Error("Failed to update family information");
       const { data: existingMembers } = await supabase
         .from("members")
         .select("id")
         .eq("family_id", family.id);
       const existingIds = (existingMembers || []).map(
-        (m: { id: number }) => m.id
+        (m: { id: number }) => m.id,
       );
-      const validMembers = members.filter((member) => {
-        if (member.is_head) return true;
-        return member.name_en.trim() !== "";
-      });
+      const validMembers = members.filter(
+        (m) => m.is_head || m.name_en.trim() !== "",
+      );
       const membersToUpdate = validMembers.filter((m) => m.id);
       const membersToInsert = validMembers.filter((m) => !m.id);
       const currentIds = membersToUpdate.map((m) => m.id) as number[];
       const memberIdsToDelete = existingIds.filter(
-        (mid: number) => !currentIds.includes(mid)
+        (mid: number) => !currentIds.includes(mid),
       );
       for (const member of membersToUpdate) {
         const { error } = await supabase
@@ -312,46 +491,37 @@ export default function EditFamilyPage() {
             relationship_ml: member.relationship_ml,
             occupation_en: member.occupation_en,
             occupation_ml: member.occupation_ml,
-            age: member.age ? parseInt(member.age) : null,
+            age: member.dob ? null : member.age ? parseInt(member.age) : null,
+            dob: member.dob || null,
             blood_group: member.blood_group,
             is_head: member.is_head,
           })
           .eq("id", member.id!);
-        if (error) {
-          console.error("Member update error:", error.message);
-          throw new Error("Failed to update member information");
-        }
+        if (error) throw new Error("Failed to update member information");
       }
       if (membersToInsert.length > 0) {
         const { error } = await supabase.from("members").insert(
-          membersToInsert.map((member) => ({
+          membersToInsert.map(({ ageInputMode, dob, ...member }) => ({
             ...member,
-            age: member.age ? parseInt(member.age) : null,
+            age: dob ? null : member.age ? parseInt(member.age) : null,
+            dob: dob || null,
             family_id: family.id,
-          }))
+          })),
         );
-        if (error) {
-          console.error("Member insert error:", error.message);
-          throw new Error("Failed to add new members");
-        }
+        if (error) throw new Error("Failed to add new members");
       }
       if (memberIdsToDelete.length > 0) {
         const { error } = await supabase
           .from("members")
           .delete()
           .in("id", memberIdsToDelete);
-        if (error) {
-          console.error("Member delete error:", error.message);
-          throw new Error("Failed to remove deleted members");
-        }
+        if (error) throw new Error("Failed to remove deleted members");
       }
       setShouldRemovePhoto(false);
       alert("Family updated successfully!");
       router.push("/families");
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "An error occurred";
-      alert(message);
+      alert(error instanceof Error ? error.message : "An error occurred");
     } finally {
       setIsSubmitting(false);
     }
@@ -624,17 +794,14 @@ export default function EditFamilyPage() {
             >
               <div className="flex justify-between items-center mb-4">
                 <h3
-                  className={`font-semibold ${
-                    member.is_head ? "text-blue-800" : "text-gray-800"
-                  }`}
+                  className={`font-semibold ${member.is_head ? "text-blue-800" : "text-gray-800"}`}
                 >
                   {member.is_head ? (
                     <span className="flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      Main Member
+                      <User className="w-4 h-4" /> Main Member
                     </span>
                   ) : (
-                    `Member ${index}`
+                    `Member ${members.filter((m, i) => !m.is_head && i <= index).length + 1}`
                   )}
                 </h3>
                 {!member.is_head && (
@@ -684,62 +851,107 @@ export default function EditFamilyPage() {
                     onChange={(e) =>
                       handleMemberChange(index, "name_ml", e.target.value)
                     }
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 text-gray-700 "
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 text-gray-700"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Relationship
                   </label>
-                  <RelationshipSelect
-                    value={member.relationship_en}
-                    onChange={(value) =>
-                      handleMemberChange(index, "relationship_en", value)
+                  <BilingualCombobox
+                    options={relationshipOptions}
+                    valueEn={member.relationship_en}
+                    valueMl={member.relationship_ml}
+                    placeholder="Select or type…"
+                    onChangeEn={(v) =>
+                      handleMemberChange(index, "relationship_en", v)
                     }
-                    onEnglishChange={(valueEn) =>
-                      handleMemberChange(index, "relationship_en", valueEn)
-                    }
-                    onMalayalamChange={(valueMl) =>
-                      handleMemberChange(index, "relationship_ml", valueMl)
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Occupation
-                  </label>
-                  <OccupationSelect
-                    value={member.occupation_en}
-                    onChange={(value) =>
-                      handleMemberChange(index, "occupation_en", value)
-                    }
-                    onEnglishChange={(valueEn) =>
-                      handleMemberChange(index, "occupation_en", valueEn)
-                    }
-                    onMalayalamChange={(valueMl) =>
-                      handleMemberChange(index, "occupation_ml", valueMl)
+                    onChangeMl={(v) =>
+                      handleMemberChange(index, "relationship_ml", v)
                     }
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Age
+                    Occupation
                   </label>
-                  <input
-                    type="number"
-                    placeholder="Age"
-                    value={member.age || ""}
-                    onChange={(e) =>
-                      handleMemberChange(index, "age", e.target.value)
+                  <BilingualCombobox
+                    options={occupationOptions}
+                    valueEn={member.occupation_en}
+                    valueMl={member.occupation_ml}
+                    placeholder="Select or type…"
+                    onChangeEn={(v) =>
+                      handleMemberChange(index, "occupation_en", v)
                     }
-                    className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 text-gray-700 ${
-                      errors[`member_${index}_age`]
-                        ? "border-red-500"
-                        : "border-gray-300"
-                    }`}
-                    min="0"
-                    max="150"
+                    onChangeMl={(v) =>
+                      handleMemberChange(index, "occupation_ml", v)
+                    }
                   />
+                </div>
+                <div className="md:col-span-2 lg:col-span-1">
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="text-sm font-medium text-gray-700 mr-1">
+                      Age
+                    </span>
+                    <div className="flex rounded-md overflow-hidden border border-gray-300 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => toggleAgeMode(index, "age")}
+                        className={`px-2 py-0.5 transition-colors ${
+                          member.ageInputMode === "age"
+                            ? "bg-blue-500 text-white"
+                            : "bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        Age
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleAgeMode(index, "dob")}
+                        className={`px-2 py-0.5 transition-colors ${
+                          member.ageInputMode === "dob"
+                            ? "bg-blue-500 text-white"
+                            : "bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        DOB
+                      </button>
+                    </div>
+                  </div>
+                  {member.ageInputMode === "age" ? (
+                    <input
+                      type="number"
+                      placeholder="Enter age"
+                      value={member.age || ""}
+                      onChange={(e) =>
+                        handleMemberChange(index, "age", e.target.value)
+                      }
+                      className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 text-gray-700 ${
+                        errors[`member_${index}_age`]
+                          ? "border-red-500"
+                          : "border-gray-300"
+                      }`}
+                      min="0"
+                      max="150"
+                    />
+                  ) : (
+                    <div>
+                      <input
+                        type="date"
+                        value={member.dob || ""}
+                        max={new Date().toISOString().split("T")[0]}
+                        onChange={(e) =>
+                          handleMemberChange(index, "dob", e.target.value)
+                        }
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+                      />
+                      {member.age && (
+                        <p className="text-xs text-blue-600 mt-1">
+                          Age: <strong>{member.age}</strong> years
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {errors[`member_${index}_age`] && (
                     <span className="text-red-500 text-xs mt-1">
                       {errors[`member_${index}_age`]}
@@ -747,13 +959,13 @@ export default function EditFamilyPage() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Blood Group
                   </label>
                   <BloodGroupSelect
-                    value={member.blood_group}
-                    onChange={(value) =>
-                      handleMemberChange(index, "blood_group", value)
+                    value={member.blood_group || ""}
+                    onChange={(v) =>
+                      handleMemberChange(index, "blood_group", v)
                     }
                   />
                 </div>
@@ -771,15 +983,15 @@ export default function EditFamilyPage() {
             <button
               type="button"
               onClick={() => router.push("/families")}
-              className="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600"
               disabled={isSubmitting}
+              className="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="bg-green-600 text-white px-8 py-2 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="bg-green-600 text-white px-8 py-2 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? "Saving..." : "Save"}
             </button>

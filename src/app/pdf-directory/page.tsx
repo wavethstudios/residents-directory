@@ -8,7 +8,9 @@ type Member = {
   relationship_ml: string;
   occupation_en: string;
   occupation_ml: string;
-  age: number;
+  age: number | null;
+  dob: string | null;
+  is_head: boolean;
 };
 type Family = {
   id: string;
@@ -20,6 +22,20 @@ type Family = {
   photo_url?: string;
   is_on_rent?: boolean | null;
   owner_name?: string | null;
+};
+const getDisplayAge = (member: {
+  age?: number | null;
+  dob?: string | null;
+}): string => {
+  if (member.dob) {
+    const birth = new Date(member.dob);
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    return age >= 0 ? String(age) : "";
+  }
+  return member.age != null ? String(member.age) : "";
 };
 const formatTextForPDF = (text: string): string => {
   if (!text) return "";
@@ -50,7 +66,7 @@ const smartFormatMixedText = (text: string): string => {
   if (hasMalayalam && hasEnglish) {
     return formattedText.replace(
       /([\u0D00-\u0D7F\s]+)/g,
-      '<span class="malayalam-text">$1</span>'
+      '<span class="malayalam-text">$1</span>',
     );
   } else if (hasMalayalam) {
     return `<span class="malayalam-text">${formattedText}</span>`;
@@ -59,7 +75,7 @@ const smartFormatMixedText = (text: string): string => {
 };
 const generatePDFHTML = (
   families: Family[],
-  language: "english" | "malayalam" | "both"
+  language: "english" | "malayalam" | "both",
 ): string => {
   const getTitle = () => {
     switch (language) {
@@ -73,13 +89,17 @@ const generatePDFHTML = (
   };
   const pages = [];
   for (let i = 0; i < families.length; i += 2) {
-    const familyPair = families.slice(i, i + 2);
-    pages.push(familyPair);
+    pages.push(families.slice(i, i + 2));
   }
   const generateFamilyCard = (family: Family) => {
+    const sortedMembers = [...(family.members || [])].sort((a, b) => {
+      if (a.is_head && !b.is_head) return -1;
+      if (!a.is_head && b.is_head) return 1;
+      return 0;
+    });
     const membersRows =
-      family.members?.length > 0
-        ? family.members
+      sortedMembers.length > 0
+        ? sortedMembers
             .map((member, index) => {
               const nameCell = (() => {
                 if (language === "english")
@@ -97,7 +117,7 @@ const generatePDFHTML = (
                   return smartFormatText(member.relationship_en);
                 if (language === "malayalam")
                   return wrapMalayalamText(
-                    member.relationship_ml || member.relationship_en
+                    member.relationship_ml || member.relationship_en,
                   );
                 let content = smartFormatText(member.relationship_en);
                 if (
@@ -113,7 +133,7 @@ const generatePDFHTML = (
                   return smartFormatText(member.occupation_en);
                 if (language === "malayalam")
                   return wrapMalayalamText(
-                    member.occupation_ml || member.occupation_en
+                    member.occupation_ml || member.occupation_en,
                   );
                 let content = smartFormatText(member.occupation_en);
                 if (
@@ -124,12 +144,13 @@ const generatePDFHTML = (
                 }
                 return content;
               })();
+              const ageDisplay = getDisplayAge(member);
               return `
             <tr class="${index % 2 === 0 ? "table-row" : "table-row-alt"}">
               <td class="table-cell name-cell">${nameCell}</td>
               <td class="table-cell relationship-cell">${relationshipCell}</td>
               <td class="table-cell occupation-cell">${occupationCell}</td>
-              <td class="table-cell age-cell">${member.age || ""}</td>
+              <td class="table-cell age-cell">${ageDisplay}</td>
             </tr>
           `;
             })
@@ -147,20 +168,12 @@ const generatePDFHTML = (
       `;
     const addressContent = (() => {
       if (language === "english")
-        return `<div class="address">${smartFormatText(
-          family.address_en
-        )}</div>`;
+        return `<div class="address">${smartFormatText(family.address_en)}</div>`;
       if (language === "malayalam")
-        return `<div class="address-malayalam">${wrapMalayalamText(
-          family.address_ml || family.address_en
-        )}</div>`;
-      let content = `<div class="address">${smartFormatText(
-        family.address_en
-      )}</div>`;
+        return `<div class="address-malayalam">${wrapMalayalamText(family.address_ml || family.address_en)}</div>`;
+      let content = `<div class="address">${smartFormatText(family.address_en)}</div>`;
       if (family.address_ml) {
-        content += `<div class="address-malayalam">${wrapMalayalamText(
-          family.address_ml
-        )}</div>`;
+        content += `<div class="address-malayalam">${wrapMalayalamText(family.address_ml)}</div>`;
       }
       return content;
     })();
@@ -207,18 +220,10 @@ const generatePDFHTML = (
     const tableHeaders = (() => {
       if (language === "malayalam") {
         return `
-          <th class="table-header-cell name-header">${wrapMalayalamText(
-            "പേര്"
-          )}</th>
-          <th class="table-header-cell relationship-header">${wrapMalayalamText(
-            "ബന്ധം"
-          )}</th>
-          <th class="table-header-cell occupation-header">${wrapMalayalamText(
-            "ജോലി/വിദ്യാഭ്യാസം"
-          )}</th>
-          <th class="table-header-cell age-header">${wrapMalayalamText(
-            "പ്രായം"
-          )}</th>
+          <th class="table-header-cell name-header">${wrapMalayalamText("പേര്")}</th>
+          <th class="table-header-cell relationship-header">${wrapMalayalamText("ബന്ധം")}</th>
+          <th class="table-header-cell occupation-header">${wrapMalayalamText("ജോലി/വിദ്യാഭ്യാസം")}</th>
+          <th class="table-header-cell age-header">${wrapMalayalamText("പ്രായം")}</th>
         `;
       }
       return `
@@ -272,7 +277,7 @@ const generatePDFHTML = (
       <div class="page-number">Page ${pageIndex + 1} of ${pages.length}</div>
     </div>
     ${pageIndex < pages.length - 1 ? '<div class="page-break"></div>' : ""}
-  `
+  `,
     )
     .join("");
   return `
@@ -285,11 +290,7 @@ const generatePDFHTML = (
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Malayalam:wght@400;500;600;700&display=swap');
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
           font-family: 'Inter', 'Helvetica', sans-serif;
           font-size: 10px;
@@ -312,9 +313,7 @@ const generatePDFHTML = (
           display: flex;
           flex-direction: column;
         }
-        .page-break {
-          page-break-after: always;
-        }
+        .page-break { page-break-after: always; }
         .header {
           font-size: 14px;
           text-align: center;
@@ -343,10 +342,7 @@ const generatePDFHTML = (
           margin-bottom: 15px;
           align-items: flex-start;
         }
-        .family-info {
-          flex: 1;
-          margin-right: 15px;
-        }
+        .family-info { flex: 1; margin-right: 15px; }
         .house-number {
           font-size: 18px;
           font-weight: 700;
@@ -354,50 +350,15 @@ const generatePDFHTML = (
           margin-bottom: 8px;
           line-height: 1.4;
         }
-        .house-number .malayalam-text {
-          font-size: 19px !important;
-          font-weight: 700;
-          line-height: 1.6;
-        }
-        .address {
-          font-size: 11px;
-          color: #475569;
-          margin-bottom: 6px;
-          line-height: 1.4;
-        }
-        .address-malayalam {
-          font-size: 12px;
-          color: #475569;
-          margin-bottom: 6px;
-          line-height: 1.8;
-        }
-        .phone {
-          font-size: 11px;
-          color: #475569;
-          font-weight: 600;
-        }
-        .tenancy {
-          margin-top: 8px;
-          font-size: 10px;
-          color: #334155;
-        }
-        .tenant-status {
-          font-weight: 600;
-          margin-left: 6px;
-        }
-        .tenant-status.owner-occupied {
-          color: #16a34a;
-        }
-        .owner-name {
-          font-weight: 700;
-          color: #0f172a;
-          margin-left: 6px;
-        }
-        .owner-missing {
-          color: #64748b;
-          font-style: italic;
-          margin-left: 6px;
-        }
+        .house-number .malayalam-text { font-size: 19px !important; font-weight: 700; line-height: 1.6; }
+        .address { font-size: 11px; color: #475569; margin-bottom: 6px; line-height: 1.4; }
+        .address-malayalam { font-size: 12px; color: #475569; margin-bottom: 6px; line-height: 1.8; }
+        .phone { font-size: 11px; color: #475569; font-weight: 600; }
+        .tenancy { margin-top: 8px; font-size: 10px; color: #334155; }
+        .tenant-status { font-weight: 600; margin-left: 6px; }
+        .tenant-status.owner-occupied { color: #16a34a; }
+        .owner-name { font-weight: 700; color: #0f172a; margin-left: 6px; }
+        .owner-missing { color: #64748b; font-style: italic; margin-left: 6px; }
         .photo-container {
           width: 80px;
           height: 80px;
@@ -408,29 +369,11 @@ const generatePDFHTML = (
           align-items: center;
           flex-shrink: 0;
         }
-        .photo {
-          width: 80px;
-          height: 80px;
-          border-radius: 5px;
-          object-fit: cover;
-        }
-        .placeholder-text {
-          font-size: 8px;
-          color: #64748b;
-          text-align: center;
-          padding: 5px;
-        }
-        .members-table {
-          border-radius: 4px;
-          overflow: hidden;
-        }
-        .members-table table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        .table-header {
-          background: #3b82f6;
-        }
+        .photo { width: 80px; height: 80px; border-radius: 5px; object-fit: cover; }
+        .placeholder-text { font-size: 8px; color: #64748b; text-align: center; padding: 5px; }
+        .members-table { border-radius: 4px; overflow: hidden; }
+        .members-table table { width: 100%; border-collapse: collapse; }
+        .table-header { background: #3b82f6; }
         .table-header-cell {
           padding: 8px;
           font-size: 9px;
@@ -439,24 +382,12 @@ const generatePDFHTML = (
           text-align: left;
           font-family: 'Inter', 'Helvetica', sans-serif;
         }
-        .name-header {
-          width: 35%;
-        }
-        .relationship-header {
-          width: 20%;
-        }
-        .occupation-header {
-          width: 35%;
-        }
-        .age-header {
-          width: 10%;
-        }
-        .table-row {
-          background: white;
-        }
-        .table-row-alt {
-          background: #f1f5f9;
-        }
+        .name-header { width: 35%; }
+        .relationship-header { width: 20%; }
+        .occupation-header { width: 35%; }
+        .age-header { width: 10%; }
+        .table-row { background: white; }
+        .table-row-alt { background: #f1f5f9; }
         .table-cell {
           padding: 8px;
           font-size: 9px;
@@ -465,40 +396,15 @@ const generatePDFHTML = (
           vertical-align: top;
           border-bottom: 1px solid #e2e8f0;
         }
-        .name-cell {
-          width: 35%;
-        }
-        .relationship-cell {
-          width: 20%;
-        }
-        .occupation-cell {
-          width: 35%;
-        }
-        .age-cell {
-          width: 10%;
-          text-align: center;
-        }
-        .empty-message {
-          text-align: center;
-          color: #64748b;
-          font-style: italic;
-          padding: 15px;
-        }
-        .page-number {
-          position: absolute;
-          bottom: 15px;
-          right: 30px;
-          font-size: 9px;
-          color: #64748b;
-        }
+        .name-cell { width: 35%; }
+        .relationship-cell { width: 20%; }
+        .occupation-cell { width: 35%; }
+        .age-cell { width: 10%; text-align: center; }
+        .empty-message { text-align: center; color: #64748b; font-style: italic; padding: 15px; }
+        .page-number { position: absolute; bottom: 15px; right: 30px; font-size: 9px; color: #64748b; }
         @media print {
-          .page {
-            margin: 0;
-            box-shadow: none;
-          }
-          .page-break {
-            page-break-after: always;
-          }
+          .page { margin: 0; box-shadow: none; }
+          .page-break { page-break-after: always; }
         }
       </style>
     </head>
@@ -510,33 +416,25 @@ const generatePDFHTML = (
 };
 const generatePDF = async (
   families: Family[],
-  language: "english" | "malayalam" | "both"
+  language: "english" | "malayalam" | "both",
 ): Promise<void> => {
   try {
     const htmlContent = generatePDFHTML(families, language);
     const response = await fetch("/api/generate-pdf", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         html: htmlContent,
-        filename: `family-directory-${language}-${
-          new Date().toISOString().split("T")[0]
-        }.pdf`,
+        filename: `family-directory-${language}-${new Date().toISOString().split("T")[0]}.pdf`,
       }),
     });
-    if (!response.ok) {
-      throw new Error("Failed to generate PDF");
-    }
+    if (!response.ok) throw new Error("Failed to generate PDF");
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.style.display = "none";
     a.href = url;
-    a.download = `family-directory-${language}-${
-      new Date().toISOString().split("T")[0]
-    }.pdf`;
+    a.download = `family-directory-${language}-${new Date().toISOString().split("T")[0]}.pdf`;
     document.body.appendChild(a);
     a.click();
     window.URL.revokeObjectURL(url);
@@ -565,64 +463,77 @@ export default function PDFDirectoryPage() {
         if (nestedError) {
           console.warn(
             "Nested select failed, trying fallback:",
-            nestedError.message
+            nestedError.message,
           );
           const { data: familiesData, error: fallbackError } = await supabase
             .from("families")
             .select("*")
             .order("house_number", { ascending: true });
-          if (fallbackError) {
+          if (fallbackError)
             throw new Error(`Database query failed: ${fallbackError.message}`);
-          }
           const familiesWithMembers = await Promise.all(
             (familiesData || []).map(async (family) => {
               const { data: membersData } = await supabase
                 .from("members")
                 .select(
-                  "name_en, name_ml, relationship_en, relationship_ml, occupation_en, occupation_ml, age"
+                  "name_en, name_ml, relationship_en, relationship_ml, occupation_en, occupation_ml, age, dob, is_head",
                 )
-                .eq("family_id", family.id);
+                .eq("family_id", family.id)
+                .order("is_head", { ascending: false });
               return {
                 ...family,
                 members: membersData || [],
                 is_on_rent: family.is_on_rent ?? false,
                 owner_name: family.owner_name ?? null,
               };
-            })
+            }),
           );
           finalData = familiesWithMembers as Family[];
         } else {
           finalData = (
             nestedData as unknown as Array<Record<string, unknown>>
           ).map((raw) => {
-            const rec = raw;
-            const membersArr = (rec.members as Member[] | undefined) ?? [];
-            const isOnRent = (rec.is_on_rent as boolean | undefined) ?? false;
-            const ownerName =
-              (rec.owner_name as string | null | undefined) ?? null;
+            const membersArr = ((raw.members as Member[] | undefined) ?? [])
+              .slice()
+              .sort((a, b) => {
+                if (a.is_head && !b.is_head) return -1;
+                if (!a.is_head && b.is_head) return 1;
+                return 0;
+              });
             return {
-              id: String(rec.id ?? ""),
-              house_number: String(rec.house_number ?? ""),
-              address_en: String(rec.address_en ?? ""),
-              address_ml: String(rec.address_ml ?? ""),
-              phone: String(rec.phone ?? ""),
-              photo_url: (rec.photo_url as string | undefined) ?? undefined,
+              id: String(raw.id ?? ""),
+              house_number: String(raw.house_number ?? ""),
+              address_en: String(raw.address_en ?? ""),
+              address_ml: String(raw.address_ml ?? ""),
+              phone: String(raw.phone ?? ""),
+              photo_url: (raw.photo_url as string | undefined) ?? undefined,
               members: membersArr,
-              is_on_rent: isOnRent,
-              owner_name: ownerName,
+              is_on_rent: (raw.is_on_rent as boolean | undefined) ?? false,
+              owner_name: (raw.owner_name as string | null | undefined) ?? null,
             } as Family;
           });
         }
-        if (!finalData) {
+        if (!finalData)
           throw new Error("No data was received from the database.");
-        }
+        finalData.sort((a, b) => {
+          const parse = (h: string) => {
+            const num = parseInt(h) || 0;
+            const alpha = h.replace(/[0-9]/g, "").trim().toLowerCase();
+            return { num, alpha };
+          };
+          const pa = parse(a.house_number);
+          const pb = parse(b.house_number);
+          return pa.num !== pb.num
+            ? pa.num - pb.num
+            : pa.alpha.localeCompare(pb.alpha);
+        });
         setFamilies(finalData);
       } catch (err) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError("An unknown and unexpected error occurred.");
-        }
+        setError(
+          err instanceof Error
+            ? err.message
+            : "An unknown and unexpected error occurred.",
+        );
       } finally {
         setLoading(false);
       }
@@ -630,7 +541,7 @@ export default function PDFDirectoryPage() {
     fetchFamilies();
   }, [supabase]);
   const handleGeneratePDF = async (
-    language: "english" | "malayalam" | "both"
+    language: "english" | "malayalam" | "both",
   ) => {
     setGenerating((prev) => ({ ...prev, [language]: true }));
     try {

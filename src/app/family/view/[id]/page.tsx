@@ -23,9 +23,25 @@ interface Member {
   occupation_en: string;
   occupation_ml: string;
   age: number | null;
+  dob: string | null;
   blood_group: string;
   is_head: boolean;
   family_id: number;
+}
+function getDisplayAge(member: {
+  age?: number | null;
+  dob?: string | null;
+}): string {
+  if (member.dob) {
+    const birth = new Date(member.dob);
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    return age >= 0 ? `${age}` : "—";
+  }
+  if (member.age != null) return `${member.age}`;
+  return "—";
 }
 export default function FamilyView() {
   const supabase = createClient();
@@ -59,7 +75,7 @@ export default function FamilyView() {
           setError("Failed to load family members");
           return;
         }
-        const safeFamily: Family = {
+        setFamily({
           id: familyData.id,
           house_number: familyData.house_number,
           address_en: familyData.address_en,
@@ -71,8 +87,7 @@ export default function FamilyView() {
               ? familyData.is_on_rent
               : false,
           owner_name: familyData.owner_name ?? null,
-        };
-        setFamily(safeFamily);
+        });
         setMembers(memberData || []);
       } catch (err) {
         console.error("Unexpected error:", err);
@@ -81,7 +96,7 @@ export default function FamilyView() {
         setIsLoading(false);
       }
     },
-    [supabase]
+    [supabase],
   );
   useEffect(() => {
     if (id && typeof id === "string") {
@@ -146,11 +161,9 @@ export default function FamilyView() {
               </div>
             )}
             <div className="flex-1 space-y-4">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  House No: {family.house_number}
-                </h1>
-              </div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                House No: {family.house_number}
+              </h1>
               <div className="space-y-2">
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700">
@@ -251,24 +264,24 @@ export default function FamilyView() {
                       <div className="text-sm font-medium text-gray-900">
                         {formatDisplayText(
                           headMember.name_en,
-                          headMember.name_ml
+                          headMember.name_ml,
                         )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatDisplayText(
                         headMember.relationship_en,
-                        headMember.relationship_ml
+                        headMember.relationship_ml,
                       ) || "-"}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {formatDisplayText(
                         headMember.occupation_en,
-                        headMember.occupation_ml
+                        headMember.occupation_ml,
                       ) || "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {headMember.age ?? "-"}
+                      {getDisplayAge(headMember)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {headMember.blood_group || "-"}
@@ -283,17 +296,17 @@ export default function FamilyView() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatDisplayText(
                         member.relationship_en,
-                        member.relationship_ml
+                        member.relationship_ml,
                       ) || "-"}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {formatDisplayText(
                         member.occupation_en,
-                        member.occupation_ml
+                        member.occupation_ml,
                       ) || "-"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {member.age ?? "-"}
+                      {getDisplayAge(member)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {member.blood_group || "-"}
