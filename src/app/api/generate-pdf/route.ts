@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+
 const isVercelDeployment = process.env.VERCEL_ENV !== undefined;
+
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const { html, filename } = await request.json();
@@ -9,18 +13,21 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
     let browser;
     if (isVercelDeployment) {
       const puppeteerCore = await import("puppeteer-core");
       const chromium = await import("@sparticuz/chromium");
+
+      const executablePath = await chromium.default.executablePath(
+        "https://github.com/Sparticuz/chromium/releases/download/v138.0.2/chromium-v138.0.2-pack.x64.tar"
+      );
+
       browser = await puppeteerCore.default.launch({
         args: chromium.default.args,
-        defaultViewport: {
-          width: 1280,
-          height: 720,
-        },
-        executablePath: await chromium.default.executablePath(),
-        headless: true,
+        defaultViewport: chromium.default.defaultViewport,
+        executablePath,
+        headless: chromium.default.headless,
       });
     } else {
       const puppeteer = await import("puppeteer");
@@ -38,11 +45,14 @@ export async function POST(request: NextRequest) {
         ],
       });
     }
+
     const page = await browser.newPage();
     await page.setContent(html, {
       waitUntil: ["networkidle0", "domcontentloaded"],
     });
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    await page.evaluateHandle("document.fonts.ready");
+
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
@@ -54,14 +64,14 @@ export async function POST(request: NextRequest) {
       },
       preferCSSPageSize: true,
     });
+
     await browser.close();
+
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${
-          filename || "document.pdf"
-        }"`,
+        "Content-Disposition": `attachment; filename="${filename || "document.pdf"}"`,
       },
     });
   } catch (error) {
