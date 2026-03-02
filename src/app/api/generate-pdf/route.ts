@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     await page.setContent(html, {
       waitUntil: ["networkidle0", "domcontentloaded"],
     });
-    await page.evaluateHandle("document.fonts.ready");
+    await page.evaluate(() => document.fonts.ready);
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
