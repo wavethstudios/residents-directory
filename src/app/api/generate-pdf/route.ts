@@ -10,24 +10,20 @@ export async function POST(request: NextRequest) {
     if (!html) {
       return NextResponse.json(
         { error: "HTML content is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
-
     let browser;
     if (isVercelDeployment) {
       const puppeteerCore = await import("puppeteer-core");
       const chromium = await import("@sparticuz/chromium");
-
-      const executablePath = await chromium.default.executablePath(
-        "https://github.com/Sparticuz/chromium/releases/download/v138.0.2/chromium-v138.0.2-pack.x64.tar"
-      );
-
       browser = await puppeteerCore.default.launch({
         args: chromium.default.args,
-        defaultViewport: chromium.default.defaultViewport,
-        executablePath,
-        headless: chromium.default.headless,
+        defaultViewport: { width: 1280, height: 720 },
+        executablePath: await chromium.default.executablePath(
+          "https://github.com/Sparticuz/chromium/releases/download/v138.0.2/chromium-v138.0.2-pack.x64.tar",
+        ),
+        headless: true,
       });
     } else {
       const puppeteer = await import("puppeteer");
@@ -45,14 +41,11 @@ export async function POST(request: NextRequest) {
         ],
       });
     }
-
     const page = await browser.newPage();
     await page.setContent(html, {
       waitUntil: ["networkidle0", "domcontentloaded"],
     });
-
     await page.evaluateHandle("document.fonts.ready");
-
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
@@ -64,9 +57,7 @@ export async function POST(request: NextRequest) {
       },
       preferCSSPageSize: true,
     });
-
     await browser.close();
-
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
@@ -78,7 +69,7 @@ export async function POST(request: NextRequest) {
     console.error("Error generating PDF:", error);
     return NextResponse.json(
       { error: "Failed to generate PDF" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
